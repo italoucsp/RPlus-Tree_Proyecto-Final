@@ -48,6 +48,7 @@ struct HyperRectangle {
   HyperRectangle();
   HyperRectangle(HyperPoint<N> minBound, HyperPoint<N> maxBound);
   bool isOverlaping(const HyperRectangle &other);
+  bool contains(const HyperPoint<N> &point);
 
 private:
   HyperPoint<N> bottom_left, top_right;
