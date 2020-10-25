@@ -28,7 +28,7 @@ class RPlus {
   vector<DATA_TYPE> hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W);
   void split_node(shared_ptr<Node> &R);
   pair<shared_ptr<Node>, ENTRY_GROUP> partition(ENTRY_GROUP &S, unsigned int ff);
-  pair<double, size_t> sweep(size_t axis, size_t Okd, unsigned int ff);
+  pair<double, size_t> sweep(size_t axis, DATA_TYPE Okd, unsigned int ff);
   void pack(ENTRY_GROUP &S, unsigned int ff);
 
 public:
