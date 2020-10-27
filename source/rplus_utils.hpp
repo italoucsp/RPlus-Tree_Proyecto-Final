@@ -7,6 +7,7 @@
 #include <utility>
 #include <stdarg.h>
 #include <iomanip> 
+#include <queue>
 
 using namespace std;
 
@@ -128,4 +129,19 @@ bool HyperRectangle<N>::isOverlaping(const HyperRectangle<N> &other) {
     }
   }
   return true;
+}
+
+template<size_t N>
+bool HyperRectangle<N>::contains(const HyperPoint &point) {
+
+}
+
+template<size_t N>
+void HyperRectangle<N>::adjust_with_hrect(const HyperRectangle<N> &other) {
+
+}
+
+template<size_t N>
+void HyperRectangle<N>::adjust_with_hpoint(const HyperPoint &point) {
+
 }
