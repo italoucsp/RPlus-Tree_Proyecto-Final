@@ -3,7 +3,7 @@
 #define COST double
 
 //DATA, DIMENSIONS, MAX NUMBER OF ENTRIES PER NODE
-template<typename DATA_TYPE, size_t N, size_t M>
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 class RPlus {
   struct Node;
 
@@ -27,15 +27,14 @@ class RPlus {
   };
 
   shared_ptr<Node> root;
-
   
   void hidden_insert(shared_ptr<Node> &R, Entry &IR);
   void hidden_remove(shared_ptr<Node> &R, Entry &IR);
   vector<DATA_TYPE> hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W);
   void split_node(shared_ptr<Node> &R);
-  pair<shared_ptr<Node>, ENTRY_GROUP> partition(ENTRY_GROUP &S, unsigned int ff);
-  pair<COST, double> sweep(size_t axis, DATA_TYPE Okd, unsigned int ff);
-  void pack(ENTRY_GROUP &S, unsigned int ff);
+  pair<shared_ptr<Node>, ENTRY_GROUP> partition(ENTRY_GROUP &S);
+  pair<COST, double> sweep(size_t axis, DATA_TYPE Okd);
+  shared_ptr<Node> pack(ENTRY_GROUP &S);
 
 public:
   RPlus();
@@ -48,8 +47,8 @@ public:
 
 //===============================R-PLUS-TREE-IMPLEMENTATION============================================
 
-template<typename DATA_TYPE, size_t N, size_t M>
-RPlus<DATA_TYPE, N, M>::RPlus() {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+RPlus<DATA_TYPE, N, M, ff>::RPlus() {
   try {
     ENTRY_GROUP temp;
     if (N < 2 || M < 2 || M > temp.max_size()) {
@@ -64,38 +63,38 @@ RPlus<DATA_TYPE, N, M>::RPlus() {
   }
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-RPlus<DATA_TYPE, N,  M>::~RPlus() {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+RPlus<DATA_TYPE, N, M, ff>::~RPlus() {
   root.reset();
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-void RPlus<DATA_TYPE, N,  M>::insert(const DATA_TYPE data) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+void RPlus<DATA_TYPE, N, M, ff>::insert(const DATA_TYPE data) {
   shared_ptr<Node> R = root;
   Entry new_entry;
   new_entry.data = data;
   hidden_insert(R, new_entry);
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-void RPlus<DATA_TYPE, N,  M>::remove(const DATA_TYPE data) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+void RPlus<DATA_TYPE, N, M, ff>::remove(const DATA_TYPE data) {
   shared_ptr<Node> R = root;
   //hidden_remove(R, IR);
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-vector<DATA_TYPE> RPlus<DATA_TYPE, N,  M>::search(const HyperRectangle<N> &W) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::search(const HyperRectangle<N> &W) {
   shared_ptr<Node> R = root;
   return hidden_search(R, W);
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-vector<DATA_TYPE> RPlus<DATA_TYPE, N, M>::kNN_query(DATA_TYPE refdata, size_t k) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::kNN_query(DATA_TYPE refdata, size_t k) {
 
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-vector<DATA_TYPE> RPlus<DATA_TYPE, N,  M>::hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W) {
   vector<DATA_TYPE> data_found;
   if (!R->isLeaf()) {
     for (Entry &entry : R->entries) {
@@ -114,8 +113,8 @@ vector<DATA_TYPE> RPlus<DATA_TYPE, N,  M>::hidden_search(shared_ptr<Node> &R, co
   return data_found;
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-void RPlus<DATA_TYPE, N, M>::hidden_insert(shared_ptr<Node> &R, Entry &IR) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+void RPlus<DATA_TYPE, N, M, ff>::hidden_insert(shared_ptr<Node> &R, Entry &IR) {
   if (!R->isLeaf()) {
     for (Entry &entry_ : R->entries) {
       if (entry_.get_mbr().contains(IR.data)) {
@@ -131,13 +130,13 @@ void RPlus<DATA_TYPE, N, M>::hidden_insert(shared_ptr<Node> &R, Entry &IR) {
   }
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-void RPlus<DATA_TYPE, N, M>::hidden_remove(shared_ptr<Node> &R, Entry &IR) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+void RPlus<DATA_TYPE, N, M, ff>::hidden_remove(shared_ptr<Node> &R, Entry &IR) {
 
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-void RPlus<DATA_TYPE, N, M>::split_node(shared_ptr<Node> &R) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+void RPlus<DATA_TYPE, N, M, ff>::split_node(shared_ptr<Node> &R) {
   /*SN1.[Find a Partition]
       Partition R using the Partition routine of the
       Pack algorithm(see next section).Let RECT and
@@ -171,47 +170,63 @@ void RPlus<DATA_TYPE, N, M>::split_node(shared_ptr<Node> &R) {
   }
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-pair<shared_ptr<RPlus<DATA_TYPE, N, M>::Node>, vector<RPlus<DATA_TYPE, N, M>::Entry>> RPlus<DATA_TYPE, N, M>::partition(ENTRY_GROUP &S, unsigned int ff) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+pair<shared_ptr<RPlus<DATA_TYPE, N, M, ff>::Node>, vector<RPlus<DATA_TYPE, N, M, ff>::Entry>> RPlus<DATA_TYPE, N, M, ff>::partition(ENTRY_GROUP &S) {
+  if (S.size() <= ff) {
+    shared_ptr<Node> newnode = make_shared<Node>();
+    ENTRY_GROUP empty_group;
+    return make_pair(newnode, empty_group);
+  }
+  vector<COST> cost_for_all_axises;
+}
+
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, DATA_TYPE Okd) {
 
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-pair<COST, double> RPlus<DATA_TYPE, N, M>::sweep(size_t axis, DATA_TYPE Okd, unsigned int ff) {
-
-}
-
-template<typename DATA_TYPE, size_t N, size_t M>
-void RPlus<DATA_TYPE, N, M>::pack(ENTRY_GROUP &S, unsigned int ff) {
-
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+shared_ptr<RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>::pack(ENTRY_GROUP &S) {
+  if (S.size() <= ff) {
+    shared_ptr<Node> newnode = make_shared<Node>();
+    for (Entry &entry : S) {
+      newnode.add(entry);
+    }
+    return newnode;
+  }
+  ENTRY_GROUP AN;
+  while (!S.empty()) {
+    partition(S).second;
+  }
+  return pack(AN);
 }
 
 //========================================NODE-IMPLEMENTATION==========================================
 
-template<typename DATA_TYPE, size_t N, size_t M>
-RPlus<DATA_TYPE, N,  M>::Node::Node() {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+RPlus<DATA_TYPE, N, M, ff>::Node::Node() {
   entries.resize(M + 1);
   size = size_t(0);
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-bool RPlus<DATA_TYPE, N,  M>::Node::isLeaf() {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+bool RPlus<DATA_TYPE, N, M, ff>::Node::isLeaf() {
   return child == nullptr;
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-void RPlus<DATA_TYPE, N, M>::Node::add(Entry &IR) {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+void RPlus<DATA_TYPE, N, M, ff>::Node::add(Entry &IR) {
   entries[size++] = IR;
 }
 
-template<typename DATA_TYPE, size_t N, size_t M>
-size_t RPlus<DATA_TYPE, N, M>::Node::get_size() {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+size_t RPlus<DATA_TYPE, N, M, ff>::Node::get_size() {
   return size;
 }
 
 //=======================================ENTRY-IMPLEMENTATION==========================================
 
-template<typename DATA_TYPE, size_t N, size_t M>
-HyperRectangle<N> RPlus<DATA_TYPE, N, M>::Entry::get_mbr() {
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+HyperRectangle<N> RPlus<DATA_TYPE, N, M, ff>::Entry::get_mbr() {
   return child->mbr;
 }
