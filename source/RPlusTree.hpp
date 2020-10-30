@@ -11,6 +11,9 @@ class RPlus {
     shared_ptr<DATA_TYPE> data;
     shared_ptr<Node> child;
 
+    Entry();
+    Entry(shared_ptr<Node> &child);
+    Entry(shared_ptr<DATA_TYPE> &data, shared_ptr<Node> &child);
     HyperRectangle<N> get_mbr();
   };
 
@@ -21,6 +24,7 @@ class RPlus {
 
     Node();
     void add(Entry &IR);
+    void add(ENTRY_GROUP &S);
     size_t get_size();
 
     size_t size;
@@ -171,34 +175,39 @@ void RPlus<DATA_TYPE, N, M, ff>::split_node(shared_ptr<Node> &R) {
 }
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-pair<shared_ptr<RPlus<DATA_TYPE, N, M, ff>::Node>, vector<RPlus<DATA_TYPE, N, M, ff>::Entry>> RPlus<DATA_TYPE, N, M, ff>::partition(ENTRY_GROUP &S) {
+pair<shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node>, vector<typename RPlus<DATA_TYPE, N, M, ff>::Entry>>
+                                        RPlus<DATA_TYPE, N, M, ff>::partition(ENTRY_GROUP &S) {
   if (S.size() <= ff) {
     shared_ptr<Node> newnode = make_shared<Node>();
+    newnode->add(S);
     ENTRY_GROUP empty_group;
     return make_pair(newnode, empty_group);
   }
+  vector<double> lowest_coordinates;
+  //compute lowest coords
   vector<COST> cost_for_all_axises;
+}
+
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>::pack(ENTRY_GROUP &S) {
+  if (S.size() <= ff) {
+    shared_ptr<Node> newnode = make_shared<Node>();
+    newnode->add(S);
+    return newnode;
+  }
+  ENTRY_GROUP S_next_level;
+  while (!S.empty()) {
+    pair<shared_ptr<Node>, ENTRY_GROUP> set_after_partition = partition(S);
+    Entry entry_for_next_level(set_after_partition.first);
+    S_next_level.push_back(entry_for_next_level);
+    S.swap(set_after_partition.second);//S = remainder hyperectangles
+  }
+  return pack(S_next_level);
 }
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, DATA_TYPE Okd) {
 
-}
-
-template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-shared_ptr<RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>::pack(ENTRY_GROUP &S) {
-  if (S.size() <= ff) {
-    shared_ptr<Node> newnode = make_shared<Node>();
-    for (Entry &entry : S) {
-      newnode.add(entry);
-    }
-    return newnode;
-  }
-  ENTRY_GROUP AN;
-  while (!S.empty()) {
-    partition(S).second;
-  }
-  return pack(AN);
 }
 
 //========================================NODE-IMPLEMENTATION==========================================
@@ -220,11 +229,34 @@ void RPlus<DATA_TYPE, N, M, ff>::Node::add(Entry &IR) {
 }
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+void RPlus<DATA_TYPE, N, M, ff>::Node::add(ENTRY_GROUP &S) {
+  for (Entry &entry : S) {
+    add(entry);
+  }
+}
+
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 size_t RPlus<DATA_TYPE, N, M, ff>::Node::get_size() {
   return size;
 }
 
 //=======================================ENTRY-IMPLEMENTATION==========================================
+
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+RPlus<DATA_TYPE, N, M, ff>::Entry::Entry() {
+
+}
+
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+RPlus<DATA_TYPE, N, M, ff>::Entry::Entry(shared_ptr<Node> &child) {
+  this->child = child;
+}
+
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+RPlus<DATA_TYPE, N, M, ff>::Entry::Entry(shared_ptr<DATA_TYPE> &data, shared_ptr<Node> &child) {
+  this->data = data;
+  this->child = child;
+}
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 HyperRectangle<N> RPlus<DATA_TYPE, N, M, ff>::Entry::get_mbr() {
