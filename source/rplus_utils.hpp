@@ -67,6 +67,7 @@ bool HyperPoint::operator<(const HyperPoint &other) const{
   catch (const exception &error) {
     ALERT(error.what());
   }
+  return false;
 }
 
 HyperPoint& HyperPoint::operator=(const HyperPoint& other) {
@@ -93,6 +94,7 @@ struct HyperRectangle {
   bool contains(const HyperPoint &point);
   void adjust_with_hrect(const HyperRectangle<N> &other);
   void adjust_with_hpoint(const HyperPoint &point);
+  pair<HyperPoint, HyperPoint> get_boundaries();
 
 private:
   HyperPoint bottom_left, top_right;
@@ -144,4 +146,9 @@ void HyperRectangle<N>::adjust_with_hrect(const HyperRectangle<N> &other) {
 template<size_t N>
 void HyperRectangle<N>::adjust_with_hpoint(const HyperPoint &point) {
 
+}
+
+template<size_t N>
+pair<HyperPoint, HyperPoint> HyperRectangle<N>::get_boundaries() {
+  return make_pair(bottom_left, top_right);
 }

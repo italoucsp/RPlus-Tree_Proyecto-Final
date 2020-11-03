@@ -15,6 +15,13 @@ class RPlus {
     Entry(shared_ptr<Node> &child);
     Entry(shared_ptr<DATA_TYPE> &data, shared_ptr<Node> &child);
     HyperRectangle<N> get_mbr();
+
+    template<size_t dimension>
+    struct Entry_lessthan_in_anyDim {
+      bool operator() (Entry A, Entry B) {
+        return (A.get_mbr().get_boundaries().first[dimension] < B.get_mbr().get_boundaries().first[dimension]);
+      }
+    };
   };
 
   struct Node {
@@ -37,7 +44,7 @@ class RPlus {
   vector<DATA_TYPE> hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W);
   void split_node(shared_ptr<Node> &R);
   pair<shared_ptr<Node>, ENTRY_GROUP> partition(ENTRY_GROUP &S);
-  pair<COST, double> sweep(size_t axis, DATA_TYPE Okd);
+  pair<COST, double> sweep(size_t axis, double Okd, ENTRY_GROUP &S);
   shared_ptr<Node> pack(ENTRY_GROUP &S);
 
 public:
@@ -183,9 +190,21 @@ pair<shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node>, vector<typename RPlu
     ENTRY_GROUP empty_group;
     return make_pair(newnode, empty_group);
   }
-  vector<double> lowest_coordinates;
   //compute lowest coords
-  vector<COST> cost_for_all_axises;
+  vector<double> lowest_coordinates(N);
+  vector<COST> cost_for_all_axises(N);
+  size_t current_dim = size_t(0);
+  for (double &low_coord : lowest_coordinates) {
+    low_coord = DBL_MAX;
+    for (Entry &entry : S) {
+      low_coord = min(entry.get_mbr().get_boundaries().first[current_dim], low_coord);
+    }
+    //compute cost with sweep
+    pair<COST, double> ans = sweep(current_dim, S);
+    cost_for_all_axises[current_dim] = ans.first;
+    ++current_dim;
+  }
+  //return node + entry_group
 }
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
@@ -206,8 +225,14 @@ shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>
 }
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, DATA_TYPE Okd) {
-
+pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, double Okd, ENTRY_GROUP &S) {
+  Entry::Entry_lessthan_in_anyDim<axis> comparator;
+  sort(S.begin(), S.end(), comparator);//"sweep"
+  ENTRY_GROUP test_set(ff);
+  for (size_t id_entry = 0; id_entry < ff; test_set[id_entry] = S[id_entry++]) {}//picking the ff firsts entries of the sorted set
+  COST total_cost = 0.0;
+  //total_cost = compute_cost( compare coverage )
+  return make_pair(total_cost, test_set[ff - 1]);
 }
 
 //========================================NODE-IMPLEMENTATION==========================================
@@ -260,5 +285,8 @@ RPlus<DATA_TYPE, N, M, ff>::Entry::Entry(shared_ptr<DATA_TYPE> &data, shared_ptr
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 HyperRectangle<N> RPlus<DATA_TYPE, N, M, ff>::Entry::get_mbr() {
-  return child->mbr;
+  if (child) {
+    return child->mbr;
+  }
+  return HyperRectangle(data, data);
 }
