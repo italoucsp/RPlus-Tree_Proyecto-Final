@@ -5,6 +5,7 @@
 //DATA, DIMENSIONS, MAX NUMBER OF ENTRIES PER NODE
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 class RPlus {
+private:
   struct Node;
 
   struct Entry {
@@ -15,13 +16,13 @@ class RPlus {
     Entry(shared_ptr<Node> &child);
     Entry(shared_ptr<DATA_TYPE> &data, shared_ptr<Node> &child);
     HyperRectangle<N> get_mbr();
+  };
 
-    template<size_t dimension>
-    struct Entry_lessthan_in_anyDim {
-      bool operator() (Entry A, Entry B) {
-        return (A.get_mbr().get_boundaries().first[dimension] < B.get_mbr().get_boundaries().first[dimension]);
-      }
-    };
+  template<size_t axis>
+  struct Entry_lessthan_in_anyDim {
+    bool operator() (Entry A, Entry B) {
+      return (A.get_mbr().get_boundaries().first[axis] < B.get_mbr().get_boundaries().first[axis]);
+    }
   };
 
   struct Node {
@@ -41,6 +42,7 @@ class RPlus {
   
   void hidden_insert(shared_ptr<Node> &R, Entry &IR);
   void hidden_remove(shared_ptr<Node> &R, Entry &IR);
+  vector<DATA_TYPE> hidden_kNN_query(DATA_TYPE refdata, size_t k, priority_queue<Entry> &q_NN);
   vector<DATA_TYPE> hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W);
   void split_node(shared_ptr<Node> &R);
   pair<shared_ptr<Node>, ENTRY_GROUP> partition(ENTRY_GROUP &S);
@@ -101,6 +103,11 @@ vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::search(const HyperRectangle<N> &W)
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::kNN_query(DATA_TYPE refdata, size_t k) {
+
+}
+
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::hidden_kNN_query(DATA_TYPE refdata, size_t k, priority_queue<Entry> &q_NN) {
 
 }
 
@@ -226,12 +233,12 @@ shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, double Okd, ENTRY_GROUP &S) {
-  Entry::Entry_lessthan_in_anyDim<axis> comparator;
-  sort(S.begin(), S.end(), comparator);//"sweep"
+  Entry_lessthan_in_anyDim<axis> comparator;
+  partial_sort(S.begin(), S.begin() + ff, S.end(), comparator);//sort the first ff entries to "sweep" -> O(n log m)
   ENTRY_GROUP test_set(ff);
   for (size_t id_entry = 0; id_entry < ff; test_set[id_entry] = S[id_entry++]) {}//picking the ff firsts entries of the sorted set
   COST total_cost = 0.0;
-  //total_cost = compute_cost( compare coverage )
+  //total_cost = calculate_cost( compare minimal coverage )
   return make_pair(total_cost, test_set[ff - 1]);
 }
 
