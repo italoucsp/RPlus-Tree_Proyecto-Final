@@ -155,36 +155,26 @@ void RPlus<DATA_TYPE, N, M, ff>::hidden_remove(shared_ptr<Node> &R, Entry &IR) {
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 void RPlus<DATA_TYPE, N, M, ff>::split_node(shared_ptr<Node> &R) {
-  /*SN1.[Find a Partition]
-      Partition R using the Partition routine of the
-      Pack algorithm(see next section).Let RECT and
-      p be the rectangle and pointer respectively associated with node R.Also, let S1 and S2 denote the
-      two sub - regions resulting after the partition.
-      Create n1 = (p1, RECT1) and n2 = (p2, RECT2), the
-      two nodes resulting from the split of R, where
-      RECTi = RECT.overlap(Si), for i = 1, 2.*/
   shared_ptr<Node> N1 = make_shared<Node>();
   shared_ptr<Node> N2 = make_shared<Node>();
-  /*SN2.[Populate New Nodes]
-      Put in ni all nodes(pk, RECTk) of R such that RECTk
-      lies completely in RECTi, for i = 1, 2. For
-      those nodes that RECTk n RECTi no= RECTk
-      (i.e.they just overlap with the sub - region)
-      a) if R is a leaf node, then put RECTk in both new nodes
-      b) Otherwise, use SplitNode to recursively split the children nodes along the partition.Let
-      (pk 1, RECTk 1) and (pk 2, RECTk 2) be the two
-      nodes after splitting(pk, RECTk), where RECTki
-      lies completely in RECTi, i = 1, 2. Add those two
-      nodes to the corresponding node ni.*/
+
+  pair<shared_ptr<Node>,ENTRY_GROUP> partition(R->entries);
+  if (R->isLeaf()) {
+
+  }
+  else {
+    split_node(N1);
+    split_node(N2);
+  }
   
-  /*SN3.[Propagate Node Split Upward]
-      If R is the root, create a new root with only two
-      children, n1 and n2.
-      Otherwise, let PR be R’s parent node.Replace R
-      in PR with n1 and n2.If PR has now more than
-      M entries, invoke SplitNode(PR).*/
   if (R == root) {
     shared_ptr<Node> new_root = make_shared<Node>();
+  }
+  else {
+    shared_ptr<Node> PR = make_shared<Node>();
+    if (PR->size() < M) {
+      split_node(PR);
+    }
   }
 }
 
@@ -197,22 +187,65 @@ pair<shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node>, vector<typename RPlu
     ENTRY_GROUP empty_group;
     return make_pair(newnode, empty_group);
   }
-  //compute lowest coords
-  vector<double> lowest_coordinates(N);
-  vector<COST> cost_for_all_axises(N);
-  size_t current_dim = size_t(0);
-  for (double &low_coord : lowest_coordinates) {
-    low_coord = DBL_MAX;
-    for (Entry &entry : S) {
-      low_coord = min(entry.get_mbr().get_boundaries().first[current_dim], low_coord);
-    }
+  //compute lowest coords #not necessary
+
+  COST cheapest_cost = DBL_MAX;
+  size_t cheapest_dim = current_dim;
+  double optimal_cutline = 0.0;
+
+  for (size_t current_dim = size_t(0); current_dim < N; ++current_dim) {
     //compute cost with sweep
-    pair<COST, double> ans = sweep(current_dim, S);
-    cost_for_all_axises[current_dim] = ans.first;
-    ++current_dim;
+    pair<COST, double> cost_and_cutline = sweep(current_dim, S);
+    COST temp_cost = cheapest_cost;
+    cheapest_cost = min(cheapest_cost, cost_and_cutline.first);
+    if (cheapest_cost != temp_cost) {
+      cheapest_dim = current_dim;
+      optimal_cutline = cost_and_cutline.second;
+    }
   }
-  //return node + entry_group
+  ENTRY_GROUP selected_entries, remainder_entries;
+  shared_ptr<Node> R = make_shared<Node>();
+  for (Entry &entry : S) {
+    if (entry.get_mbr().get_boundaries().first[cheapest_dim] < optimal_cutline) {
+      selected_entries.push_back(entry);
+    }
+    else {
+      remainder_entries.push_back(entry);
+    }
+  }
+  R->add(selected_entries);
+  return make_pair(R, remainder_entries);
 }
+
+/*
+pair<ENTRY_GROUP,ENTRY_GROUP> partition(ENTRY_GROUP &S) {
+  if |S| <= ff {
+    ENTRY_GROUP EmptyG
+    return make_pair(S,EmptyG)
+  }
+  optimal_dim = 0
+  cheapest_cost = 0
+  optimal_cutline = 0.0;
+  for each dim in dims {
+    cost_and_cutline = sweep(dim, S)
+    cheapest_cost = min(cost_and_cutline.cost, cheapest_cost)
+    if cheapest_cost changed {
+      optimal_cutline = cost_and_cutline.cutline
+      optimal_dim = dim
+    }
+  }
+  S1, S2
+  for each entry in S {
+    if entry.mbr.minbound[optimal_dim] < optimal_cutline {
+      S1.push_back(entry)
+    }
+    else {
+      S2.push_back(entry)
+    }
+  }
+  return make_pair(S1,S2)
+}
+*/
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>::pack(ENTRY_GROUP &S) {
@@ -230,6 +263,16 @@ shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>
   }
   return pack(S_next_level);
 }
+
+/*
+shared_ptr<Node> pack(ENTRY_GROUP &S) {
+  if |S| <= ff {
+    ENTRY_GROUP EmptyG
+    return make_pair(S,EmptyG)
+  }
+  
+}
+*/
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, double Okd, ENTRY_GROUP &S) {
