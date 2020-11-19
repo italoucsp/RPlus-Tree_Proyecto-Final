@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <iomanip> 
 #include <queue>
+#include <math.h>
 
 using namespace std;
 
@@ -95,6 +96,7 @@ struct HyperRectangle {
   void adjust_with_hrect(const HyperRectangle<N> &other);
   void adjust_with_hpoint(const HyperPoint &point);
   pair<HyperPoint, HyperPoint> get_boundaries();
+  double get_hypervolume();
 
 private:
   HyperPoint bottom_left, top_right;
@@ -140,7 +142,10 @@ bool HyperRectangle<N>::contains(const HyperPoint &point) {
 
 template<size_t N>
 void HyperRectangle<N>::adjust_with_hrect(const HyperRectangle<N> &other) {
-
+  for (size_t i = 0; i < N; ++i) {
+    bottom_left[i] = min(other.bottom_left[i], bottom_left[i]);
+    top_right[i] = max(other.top_right[i], top_right[i]);
+  }
 }
 
 template<size_t N>
@@ -151,4 +156,13 @@ void HyperRectangle<N>::adjust_with_hpoint(const HyperPoint &point) {
 template<size_t N>
 pair<HyperPoint, HyperPoint> HyperRectangle<N>::get_boundaries() {
   return make_pair(bottom_left, top_right);
+}
+
+template<size_t N>
+double HyperRectangle<N>::get_hypervolume() {
+  double hypervolume = 1.0;
+  for (size_t i = 0; i < N; ++i) {
+    hypervolume *= abs(top_right[i] - bottom_left[i]);
+  }
+  return hypervolume;
 }

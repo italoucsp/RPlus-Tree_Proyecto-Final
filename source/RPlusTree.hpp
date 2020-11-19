@@ -3,7 +3,7 @@
 #define COST double
 
 //DATA, DIMENSIONS, MAX NUMBER OF ENTRIES PER NODE
-template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff = M/2>
 class RPlus {
 private:
   struct Node;
@@ -45,9 +45,12 @@ private:
   vector<DATA_TYPE> hidden_kNN_query(DATA_TYPE refdata, size_t k, priority_queue<Entry> &q_NN);
   vector<DATA_TYPE> hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W);
   void split_node(shared_ptr<Node> &R);
-  pair<shared_ptr<Node>, ENTRY_GROUP> partition(ENTRY_GROUP &S);
+  //pair<shared_ptr<Node>, ENTRY_GROUP> partition(ENTRY_GROUP &S);
+  ENTRY_GROUP partition(ENTRY_GROUP &S);
   pair<COST, double> sweep(size_t axis, double Okd, ENTRY_GROUP &S);
   shared_ptr<Node> pack(ENTRY_GROUP &S);
+
+  COST calculate_cost(ENTRY_GROUP &test_set);//min coverage
 
 public:
   RPlus();
@@ -155,10 +158,11 @@ void RPlus<DATA_TYPE, N, M, ff>::hidden_remove(shared_ptr<Node> &R, Entry &IR) {
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 void RPlus<DATA_TYPE, N, M, ff>::split_node(shared_ptr<Node> &R) {
-  shared_ptr<Node> N1 = make_shared<Node>();
+  ENTRY_GROUP set_in_overflow = R->entries;
+  shared_ptr<Node> N1 = pack(R->entries);
   shared_ptr<Node> N2 = make_shared<Node>();
+                   N2->add(R->entries);
 
-  pair<shared_ptr<Node>,ENTRY_GROUP> partition(R->entries);
   if (R->isLeaf()) {
 
   }
@@ -178,6 +182,7 @@ void RPlus<DATA_TYPE, N, M, ff>::split_node(shared_ptr<Node> &R) {
   }
 }
 
+/*
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 pair<shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node>, vector<typename RPlus<DATA_TYPE, N, M, ff>::Entry>>
                                         RPlus<DATA_TYPE, N, M, ff>::partition(ENTRY_GROUP &S) {
@@ -215,6 +220,40 @@ pair<shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node>, vector<typename RPlu
   }
   R->add(selected_entries);
   return make_pair(R, remainder_entries);
+}*/
+
+/////////////////////////////////////TRYING////////////////////////////////////////////
+
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+vector<typename RPlus<DATA_TYPE, N, M, ff>::Entry> RPlus<DATA_TYPE, N, M, ff>::partition(ENTRY_GROUP &S) {
+  if (S.size() <= ff) {
+    ENTRY_GROUP empty_group;
+    return empty_group;
+  }
+  COST cheapest_cost = DBL_MAX;
+  size_t optimal_dim = size_t(0);
+  double optimal_cutline = 0.0;
+
+  for (size_t current_dim = size_t(0); current_dim < N; ++current_dim) {
+    pair<COST, double> cost_and_cutline = sweep(current_dim, S);
+    COST temp_min_cost = cheapest_cost;
+    cheapest_cost = min(cost_and_cutline.first, cheapest_cost);
+    if (cheapest_cost != temp_min_cost) {
+      optimal_cutline = cost_and_cutline.second;
+      optimal_dim = current_dim;
+    }
+  }
+  ENTRY_GROUP s1, s2;
+  for (Entry &entry : S) {
+    if (entry.get_mbr().get_boundaries().first[cheapest_dim] <= optimal_cutline) {
+      s1.push_back(entry);
+    }
+    else {
+      s2.push_back(entry);
+    }
+  }
+  S = s1;
+  return s2;
 }
 
 /*
@@ -254,6 +293,21 @@ shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>
     newnode->add(S);
     return newnode;
   }
+
+  ENTRY_GROUP set_after_partition = partition(S);
+  shared_ptr<Node> newnode = make_shared<Node>();
+  newnode->add(set_after_partition);
+  return newnode;
+}
+
+/*
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>::pack(ENTRY_GROUP &S) {
+  if (S.size() <= ff) {
+    shared_ptr<Node> newnode = make_shared<Node>();
+    newnode->add(S);
+    return newnode;
+  }
   ENTRY_GROUP S_next_level;
   while (!S.empty()) {
     pair<shared_ptr<Node>, ENTRY_GROUP> set_after_partition = partition(S);
@@ -262,17 +316,18 @@ shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>
     S.swap(set_after_partition.second);//S = remainder hyperectangles
   }
   return pack(S_next_level);
-}
+}*/
 
-/*
-shared_ptr<Node> pack(ENTRY_GROUP &S) {
-  if |S| <= ff {
-    ENTRY_GROUP EmptyG
-    return make_pair(S,EmptyG)
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+COST RPlus<DATA_TYPE, N, M, ff>::calculate_cost(ENTRY_GROUP &test_set) {
+  COST group_cost = 0.0;
+  HyperRectangle cover_mbr;
+  for (Entry &entry : test_set) {
+    cover_mbr.adjust_with_hrect(entry.get_mbr());
+    group_cost += entry.get_mbr().get_hypervolume();
   }
-  
+  return abs(cover_mbr.get_hypervolume() - group_cost);
 }
-*/
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, double Okd, ENTRY_GROUP &S) {
@@ -280,8 +335,7 @@ pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, double Okd, EN
   partial_sort(S.begin(), S.begin() + ff, S.end(), comparator);//sort the first ff entries to "sweep" -> O(n log m)
   ENTRY_GROUP test_set(ff);
   for (size_t id_entry = 0; id_entry < ff; test_set[id_entry] = S[id_entry++]) {}//picking the ff firsts entries of the sorted set
-  COST total_cost = 0.0;
-  //total_cost = calculate_cost( compare minimal coverage )
+  COST total_cost = calculate_cost(test_set);
   return make_pair(total_cost, test_set[ff - 1]);
 }
 
