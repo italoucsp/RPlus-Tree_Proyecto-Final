@@ -37,7 +37,7 @@ private:
 
   struct comparator_ENTRYDIST {
     bool operator()(const ENTRYDIST &A, const ENTRYDIST &B) {
-      return A.distance > B.distancia;
+      return A.distance > B.distance;
     }
   };
 
@@ -139,7 +139,7 @@ vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::hidden_search(shared_ptr<Node> &R,
   vector<DATA_TYPE> data_found;
   if (!R->is_leaf()) {
     for (Entry &entry : R->entries) {
-      if (entry.entry_rect.isOverlaping(W)) {
+      if (entry.get_mbr().isOverlaping(W)) {
         hidden_search(entry.child, W);
       }
     }
