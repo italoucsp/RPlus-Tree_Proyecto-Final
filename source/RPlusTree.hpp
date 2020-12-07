@@ -3,7 +3,7 @@
 #define COST double
 
 //DATA, DIMENSIONS, MAX NUMBER OF ENTRIES PER NODE
-template<typename DATA_TYPE, size_t N, size_t M, size_t ff = M/2>
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff = M / 2>
 class RPlus {
 private:
   struct Node;
@@ -27,6 +27,7 @@ private:
 
   struct Node {
     HyperRectangle<N> mbr;
+    shared_ptr<Node> parent;
     ENTRY_GROUP entries;
     bool isLeaf();
 
@@ -39,23 +40,21 @@ private:
   };
 
   shared_ptr<Node> root;
-  
+
   void hidden_insert(shared_ptr<Node> &R, Entry &IR);
-  void hidden_remove(shared_ptr<Node> &R, Entry &IR);
   vector<DATA_TYPE> hidden_kNN_query(DATA_TYPE refdata, size_t k, priority_queue<Entry> &q_NN);
   vector<DATA_TYPE> hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W);
   void split_node(shared_ptr<Node> &R);
-  ENTRY_GROUP partition(ENTRY_GROUP &S);
-  pair<COST, double> sweep(size_t axis, double Okd, ENTRY_GROUP &S);
-  //shared_ptr<Node> pack(ENTRY_GROUP &S);
-
-  COST calculate_cost(ENTRY_GROUP &test_set);//min coverage
+  tuple<ENTRY_GROUP, ENTRY_GROUP, ENTRY_GROUP> partition(ENTRY_GROUP *S);
+  pair<COST, double> sweep(size_t axis, ENTRY_GROUP *S);
+  COST calculate_cost(ENTRY_GROUP *test_set);//min coverage
+  double MINDIST(DATA_TYPE p, const HyperRectangle<N> r);
+  double MINMAXDIST(DATA_TYPE p, const HyperRectangle<N> r);
 
 public:
   RPlus();
   ~RPlus();
   void insert(const DATA_TYPE data);
-  void remove(const DATA_TYPE data);
   vector<DATA_TYPE> search(const HyperRectangle<N> &W);
   vector<DATA_TYPE> kNN_query(DATA_TYPE refdata, size_t k);
 };
@@ -92,48 +91,6 @@ void RPlus<DATA_TYPE, N, M, ff>::insert(const DATA_TYPE data) {
 }
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-void RPlus<DATA_TYPE, N, M, ff>::remove(const DATA_TYPE data) {
-  shared_ptr<Node> R = root;
-  //hidden_remove(R, IR);
-}
-
-template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::search(const HyperRectangle<N> &W) {
-  shared_ptr<Node> R = root;
-  return hidden_search(R, W);
-}
-
-template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::kNN_query(DATA_TYPE refdata, size_t k) {
-
-}
-
-template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::hidden_kNN_query(DATA_TYPE refdata, size_t k, priority_queue<Entry> &q_NN) {
-
-}
-
-template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W) {
-  vector<DATA_TYPE> data_found;
-  if (!R->isLeaf()) {
-    for (Entry &entry : R->entries) {
-      if (entry.entry_rect.isOverlaping(W)) {
-        hidden_search(entry.child,W);
-      }
-    }
-  }
-  else {
-    for (Entry &entry : R->entries) {
-      if (entry.entry_rect.isOverlaping(W)) {
-        data_found.push_back(entry.data);
-      }
-    }
-  }
-  return data_found;
-}
-
-template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 void RPlus<DATA_TYPE, N, M, ff>::hidden_insert(shared_ptr<Node> &R, Entry &IR) {
   if (!R->isLeaf()) {
     for (Entry &entry_ : R->entries) {
@@ -150,95 +107,176 @@ void RPlus<DATA_TYPE, N, M, ff>::hidden_insert(shared_ptr<Node> &R, Entry &IR) {
   }
 }
 
+//RANGE QUERY SEARCH
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-void RPlus<DATA_TYPE, N, M, ff>::hidden_remove(shared_ptr<Node> &R, Entry &IR) {
+vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::search(const HyperRectangle<N> &W) {
+  shared_ptr<Node> R = root;
+  return hidden_search(R, W);
+}
+
+//RANGE QUERY SEARCH PRIVATE
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::hidden_search(shared_ptr<Node> &R, const HyperRectangle<N> &W) {
+  vector<DATA_TYPE> data_found;
+  if (!R->isLeaf()) {
+    for (Entry &entry : R->entries) {
+      if (entry.entry_rect.isOverlaping(W)) {
+        hidden_search(entry.child, W);
+      }
+    }
+  }
+  else {
+    for (Entry &entry : R->entries) {
+      if (entry.entry_rect.isOverlaping(W)) {
+        data_found.push_back(entry.data);
+      }
+    }
+  }
+  return data_found;
+}
+
+//KNN QUERY SEARCH
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::kNN_query(DATA_TYPE refdata, size_t k) {
 
 }
 
+//KNN QUERY SEARCH PRIVATE
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+vector<DATA_TYPE> RPlus<DATA_TYPE, N, M, ff>::hidden_kNN_query(DATA_TYPE refdata, size_t k, priority_queue<Entry> &q_NN) {
+
+}
+
+//SPLIT NODE METHOD
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 void RPlus<DATA_TYPE, N, M, ff>::split_node(shared_ptr<Node> &R) {
-  ENTRY_GROUP set_in_overflow = R->entries;
-  shared_ptr<Node> N1 = pack(R->entries);
+  tuple<ENTRY_GROUP, ENTRY_GROUP, ENTRY_GROUP> partitioned_group = partition(&R->entries);
   shared_ptr<Node> N2 = make_shared<Node>();
-                   N2->add(R->entries);
-
-  if (R->isLeaf()) {
-
+                   N2->add(get<1>(partitioned_group));
+                   R = make_shared<Node>();
+                   R->add(get<0>(partitioned_group));
+  for (Entry &entry : get<2>(partitioned_group)) {
+    if (R->isLeaf()) {
+      R->add(entry);
+      N2->add(entry);
+    }
+    else {
+      split_node(entry.child);
+      //add the two newnodes to entry.child
+    }
   }
-  else {
-    split_node(N1);
-    split_node(N2);
-  }
-  
   if (R == root) {
     shared_ptr<Node> new_root = make_shared<Node>();
+    Entry en1(R), en2(N2);
+    new_root->add(en1); new_root->add(en2);
+    root = new_root;
   }
   else {
-    shared_ptr<Node> PR = make_shared<Node>();
-    if (PR->size() < M) {
+    shared_ptr<Node> PR = R->parent;
+    //replace R with R' and N2
+    if (PR->get_size() > M) {
       split_node(PR);
     }
   }
 }
 
+//PARTITION METHOD
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-vector<typename RPlus<DATA_TYPE, N, M, ff>::Entry> RPlus<DATA_TYPE, N, M, ff>::partition(ENTRY_GROUP &S) {
-  if (S.size() <= ff) {
+tuple<vector<typename RPlus<DATA_TYPE, N, M, ff>::Entry>, vector<typename RPlus<DATA_TYPE, N, M, ff>::Entry>,
+    vector<typename RPlus<DATA_TYPE, N, M, ff>::Entry>> RPlus<DATA_TYPE, N, M, ff>::partition(ENTRY_GROUP *S) {
+  if (S->size() <= ff) {
     ENTRY_GROUP empty_group;
-    return empty_group;
+    return make_tuple(*S, empty_group, empty_group);
   }
   COST cheapest_cost = DBL_MAX;
   size_t optimal_dim = size_t(0);
   double optimal_cutline = 0.0;
 
   for (size_t current_dim = size_t(0); current_dim < N; ++current_dim) {
-    pair<COST, double> cost_and_cutline = sweep(current_dim, S);
+    pair<COST, double> cost_and_cutline = sweep(current_dim, S);//sweep in any dimension
     COST temp_min_cost = cheapest_cost;
     cheapest_cost = min(cost_and_cutline.first, cheapest_cost);
+
     if (cheapest_cost != temp_min_cost) {
       optimal_cutline = cost_and_cutline.second;
       optimal_dim = current_dim;
     }
   }
-  ENTRY_GROUP s1, s2;
-  for (Entry &entry : S) {
-    if (entry.get_mbr().get_boundaries().first[cheapest_dim] <= optimal_cutline) {
+  ENTRY_GROUP s1, s2, s3;
+  for (Entry &entry : *S) {
+    if (entry.get_mbr().get_boundaries().second[optimal_dim] <= optimal_cutline)//only in the first group
       s1.push_back(entry);
-    }
-    else {
+    else if (entry.get_mbr().get_boundaries().first[optimal_dim] > optimal_cutline)//only in the second group
       s2.push_back(entry);
-    }
+    else //entry match in the two groups
+      s3.push_back(entry);
   }
-  S = s1;
-  return s2;
+  return make_tuple(s1, s2, s3);
 }
 
+//SWEEP DIMENSIONS METHOD
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-COST RPlus<DATA_TYPE, N, M, ff>::calculate_cost(ENTRY_GROUP &test_set) {
+pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, ENTRY_GROUP *S) {
+  Entry_lessthan_in_anyDim<axis> comparator;
+  partial_sort(S->begin(), S->begin() + ff, S->end(), comparator);//sort the first ff entries to "sweep" -> O(n log m)
+  ENTRY_GROUP test_set(ff);
+  for (size_t id_entry = 0; id_entry < ff; test_set[id_entry] = (*S)[id_entry++]) {}//picking the ff firsts entries of the sorted set
+  COST total_cost = calculate_cost(&test_set);
+  return make_pair(total_cost, test_set[ff - 1].get_mbr().get_boundaries().first[axis]);
+}
+
+//MINIMAL COVERAGE COST METHOD
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+COST RPlus<DATA_TYPE, N, M, ff>::calculate_cost(ENTRY_GROUP *test_set) {
   COST group_cost = 0.0;
-  HyperRectangle cover_mbr;
-  for (Entry &entry : test_set) {
-    cover_mbr.adjust_with_hrect(entry.get_mbr());
+  HyperRectangle<N> coverage_mbr;
+  for (Entry &entry : *test_set) {
+    coverage_mbr.adjust_with_hrect(entry.get_mbr());
     group_cost += entry.get_mbr().get_hypervolume();
   }
-  return abs(cover_mbr.get_hypervolume() - group_cost);
+  return abs(coverage_mbr.get_hypervolume() - group_cost);
 }
 
+//DIST TO NEAREST SIDE OF HYPERETANGLE
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
-pair<COST, double> RPlus<DATA_TYPE, N, M, ff>::sweep(size_t axis, double Okd, ENTRY_GROUP &S) {
-  Entry_lessthan_in_anyDim<axis> comparator;
-  partial_sort(S.begin(), S.begin() + ff, S.end(), comparator);//sort the first ff entries to "sweep" -> O(n log m)
-  ENTRY_GROUP test_set(ff);
-  for (size_t id_entry = 0; id_entry < ff; test_set[id_entry] = S[id_entry++]) {}//picking the ff firsts entries of the sorted set
-  COST total_cost = calculate_cost(test_set);
-  return make_pair(total_cost, test_set[ff - 1]);
+double RPlus<DATA_TYPE, N, M, ff>::MINDIST(DATA_TYPE p, const HyperRectangle<N> r) {
+  double sum = 0.0;
+  for (size_t i = size_t(0); i < N; ++i) {
+    if (p[i] < r.get_boundaries().first[i])
+      sum += pow(p[i] - r.get_boundaries().first[i], 2);
+    else if (p[i] > r.get_boundaries().second[i])
+      sum += pow(p[i] - r.get_boundaries().second[i], 2);
+  }
+  return sqrt(sum);
+}
+
+//DIST TO FURTHEST CORNER - NEAREST SIDE OF HYPERETANGLE
+template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
+double RPlus<DATA_TYPE, N, M, ff>::MINMAXDIST(DATA_TYPE p, const HyperRectangle<N> r) {
+  double minmax = DBL_MAX;
+  for (size_t i = size_t(0); i < N; ++i) {
+    double RMsum = 0.0;
+    for (size_t j = size_t(0); j < N; ++j) {
+      if (j != i) {
+        if (p[j] >= (r.get_boundaries().first[j] + r.get_boundaries().second[j]) / 2)
+          RMsum += pow(p[j] - r.get_boundaries().first[j], 2);
+        else
+          RMsum += pow(p[j] - r.get_boundaries().second[j], 2);
+      }
+    }
+    if (p[i] <= (r.get_boundaries().first[i] + r.get_boundaries().second[i]) / 2)
+      minmax = min(pow(p[i] - r.get_boundaries().first[i], 2) + RMsum, minmax);
+    else
+      minmax = min(pow(p[i] - r.get_boundaries().second[i], 2) + RMsum, minmax);
+  }
+  return sqrt(minmax);
 }
 
 //========================================NODE-IMPLEMENTATION==========================================
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 RPlus<DATA_TYPE, N, M, ff>::Node::Node() {
-  entries.resize(M + 1);
+  entries.resize(M + 2);
   size = size_t(0);
 }
 
@@ -268,7 +306,6 @@ size_t RPlus<DATA_TYPE, N, M, ff>::Node::get_size() {
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 RPlus<DATA_TYPE, N, M, ff>::Entry::Entry() {
-
 }
 
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>

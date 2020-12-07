@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <algorithm>
 #include <vector>
@@ -8,6 +9,7 @@
 #include <stdarg.h>
 #include <iomanip> 
 #include <queue>
+#include <tuple>
 #include <math.h>
 
 using namespace std;
@@ -166,3 +168,4 @@ double HyperRectangle<N>::get_hypervolume() {
   }
   return hypervolume;
 }
+
