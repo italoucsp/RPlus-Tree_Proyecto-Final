@@ -99,3 +99,87 @@ pair<shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node>, vector<typename RPlu
   R->add(selected_entries);
   return make_pair(R, remainder_entries);
 }*/
+
+double MINMAXDIST(HyperPoint<T> p, const HyperRectangle<N> r);//not necessary but could be if overlap would exist
+
+//DIST TO FURTHEST CORNER - NEAREST SIDE OF HYPERETANGLE
+template<typename T, size_t N, size_t M, size_t ff>
+double RPlus<T, N, M, ff>::MINMAXDIST(T p, const HyperRectangle<N> r) {
+  double minmax = DBL_MAX;
+  for (size_t i = size_t(0); i < N; ++i) {
+    double RMsum = 0.0;
+    for (size_t j = size_t(0); j < N; ++j) {
+      if (j != i) {
+        if (p[j] >= (r.get_boundaries().first[j] + r.get_boundaries().second[j]) / 2)
+          RMsum += pow(p[j] - r.get_boundaries().first[j], 2);
+        else
+          RMsum += pow(p[j] - r.get_boundaries().second[j], 2);
+      }
+    }
+    if (p[i] <= (r.get_boundaries().first[i] + r.get_boundaries().second[i]) / 2)
+      minmax = min(pow(p[i] - r.get_boundaries().first[i], 2) + RMsum, minmax);
+    else
+      minmax = min(pow(p[i] - r.get_boundaries().second[i], 2) + RMsum, minmax);
+  }
+  return sqrt(minmax);
+}
+///////////tests/////////////////////
+{
+    HyperPoint<double, 5> point(array<double, 5>{12, 1987, 15, 26, 12548.0256});
+    point.show_data();
+  }
+  {
+    HyperPoint<int, 2> point;
+    point.show_data();
+  }
+  {
+    HyperPoint<int, 2> A(array<int, 2>{80, 10});
+    HyperPoint<int, 2> B(array<int, 2>{50, 20});
+    HyperRectangle<int, 2> rect(A, B);
+    rect.show_data();
+  }
+  {
+    HyperPoint<int, 2> A(array<int, 2>{30, 10});
+    HyperPoint<int, 2> B(array<int, 2>{50, 20});
+    HyperRectangle<int, 2> rect(A, B, true);
+    rect.show_data();
+    HyperPoint<int, 2> C(array<int, 2>{90, 2});
+    rect.insert_data(&C);
+    rect.show_data();
+
+    HyperPoint<int, 2> D(array<int, 2>{80, 70});
+    HyperPoint<int, 2> E(array<int, 2>{120, 130});
+    HyperRectangle<int, 2> rect2(D, E, true);
+    rect2.show_data();
+
+    rect.adjust(rect2);
+    rect.show_data();
+  }
+  {
+    HyperPoint<int, 2> A(array<int, 2>{20, 20});
+    HyperPoint<int, 2> B(array<int, 2>{30, 30});
+    HyperRectangle<int, 2> rect(A, B);
+    rect.show_data();
+
+    HyperPoint<int, 2> D(array<int, 2>{30, 29});
+    HyperPoint<int, 2> E(array<int, 2>{40, 50});
+    HyperRectangle<int, 2> rect2(D, E);
+    rect2.show_data();
+
+    cout << rect.overlaps(rect2) << endl;
+    cout << rect2.overlaps(rect) << endl;
+  }
+  {
+    HyperPoint<int, 2> A(array<int, 2>{210, 20});
+    HyperPoint<int, 2> B(array<int, 2>{30, 130});
+    HyperRectangle<int, 2> rect(A, B);
+    rect.show_data();
+    cout << rect.get_hypervolume() << endl;
+  }
+  {
+    HyperPoint<int, 2> A(array<int, 2>{10, 25});
+    HyperPoint<int, 2> B(array<int, 2>{80, 100});
+    HyperRectangle<int, 2> rect(A, B);
+    rect.get_boundaries().first.show_data();
+    rect.get_boundaries().second.show_data();
+  }

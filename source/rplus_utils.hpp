@@ -15,110 +15,156 @@
 using namespace std;
 
 #define ENTRY_GROUP vector<Entry>
-#define RECT_GROUP vector<HyperRectangle<size_t(N_)>>
 #define ALERT(message) cout << message << endl;
-#define ERROR_M_N_VALUES "ERROR: El n\243mero de dimensiones y el n\243mero de espacios por nodo deben ser mayor a 1."
-#define ERROR_BND_VALUES "ERROR: El valor de maxBound dado debe ser mayor al de minBound."
-#define ERROR_NEQ_DIMS "ERROR: Las dimensiones de ambos puntos deben ser iguales."
+#define ERROR_M_N_VALUES "ERROR: The number of dimensions and/or the number of entries per node should be greater than 1."
+#define ERROR_FF_VALUE "ERROR: The value for fill factor should be between 1 and M."
+#define ERROR_NODE_OFR "ERROR: The index is out of range in the node."
+#define ERROR_NO_RECTDATA "ERROR: This rectangle is not a data container."
 
+template<typename T, size_t N>
 struct HyperPoint {
   HyperPoint();
-  explicit HyperPoint(size_t N, ...);
-
-  void reset(size_t N);
-  bool operator<(const HyperPoint &other) const;
-  HyperPoint& operator=(const HyperPoint& other);
-  double& operator[](size_t index);
+  HyperPoint(array<T, N> data);
+  bool operator<(const HyperPoint<T, N> &other) const;
+  bool operator>(const HyperPoint<T, N> &other) const;
+  HyperPoint<T, N>& operator=(const HyperPoint<T, N> &other);
+  T& operator[](size_t index);
+  T operator[](size_t index) const;
   void show_data();
 
 private:
-  vector<double> dimensions;
+  array<T, N> multidata;
 };
 
-HyperPoint::HyperPoint() {
-  dimensions.resize(size_t(2));
-  for (auto &d : dimensions) d = 0.0;
+template<typename T, size_t N>
+HyperPoint<T, N>::HyperPoint() {
+  multidata.fill(T(0));
 }
 
-HyperPoint::HyperPoint(size_t N, ...) {
-  va_list list;
-  va_start(list, N);
-  dimensions.resize(N);
-  for (double &d : dimensions) { d = va_arg(list, double); }
-  va_end(list);
+template<typename T, size_t N>
+HyperPoint<T, N>::HyperPoint(array<T, N> data) {
+  for (size_t i(0); i < N; ++i) {
+    multidata[i] = data[i];
+  }
 }
 
-void HyperPoint::reset(size_t N) {
-  dimensions.resize(N);
-  for (size_t i = 0; i < N; dimensions[i] = 0.0, ++i) {}
-}
-
-bool HyperPoint::operator<(const HyperPoint &other) const{
-  try {
-    if (this->dimensions.size() != other.dimensions.size()) {
-      throw runtime_error(ERROR_NEQ_DIMS);
-    }
-    else {
-      for (size_t i = 0; i < dimensions.size(); ++i) {
-        if (this->dimensions[i] >= other.dimensions[i]) {
-          return false;
-        }
-      }
-      return true;
+template<typename T, size_t N>
+bool HyperPoint<T, N>::operator<(const HyperPoint<T, N> &other) const{
+  for (size_t i(0); i < N; ++i) {
+    if (multidata[i] >= other.multidata[i]) {
+      return false;
     }
   }
-  catch (const exception &error) {
-    ALERT(error.what());
-  }
-  return false;
+  return true;
 }
 
-HyperPoint& HyperPoint::operator=(const HyperPoint& other) {
-  this->dimensions.resize(other.dimensions.size());
-  for (size_t i = 0; i < dimensions.size(); this->dimensions[i] = other.dimensions[i], ++i) {}
+template<typename T, size_t N>
+bool HyperPoint<T, N>::operator>(const HyperPoint<T, N> &other) const {
+  return !(*this < other);
+}
+
+template<typename T, size_t N>
+HyperPoint<T, N>& HyperPoint<T, N>::operator=(const HyperPoint<T, N>& other) {
+  for (size_t i(0); i < N; multidata[i] = other.multidata[i], ++i) {}
   return *this;
 }
 
-double& HyperPoint::operator[](size_t index) {
-  return dimensions[index];
+template<typename T, size_t N>
+T& HyperPoint<T, N>::operator[](size_t index) {
+  return multidata[index];
 }
 
-void HyperPoint::show_data() {
-  cout << '['; for (auto d : dimensions) {
-    cout << setprecision(10) << d << ',';
-  }cout << "//]" << endl;
+template<typename T, size_t N>
+T HyperPoint<T, N>::operator[](size_t index) const{
+  return multidata[index];
 }
 
-template<size_t N>
+template<typename T, size_t N>
+void HyperPoint<T, N>::show_data() {
+  cout << "\tHyperPoint<" << N << "> : {"; for (size_t i(0); i < N; ++i) cout << setprecision(10) << multidata[i] << ((i != N - 1) ? "," : ""); cout << "}" << endl;
+}
+
+template<typename T, size_t N>
+HyperPoint<T, N> get_min(const HyperPoint<T, N> A, const HyperPoint<T, N> B) {
+  return (A < B) ? A : B;
+}
+
+template<typename T, size_t N>
+HyperPoint<T, N> get_max(const HyperPoint<T, N> A, const HyperPoint<T, N> B) {
+  return (A > B) ? A : B;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template<typename T, size_t N>
 struct HyperRectangle {
   HyperRectangle();
-  HyperRectangle(HyperPoint minBound, HyperPoint maxBound);
-  bool isOverlaping(const HyperRectangle<N> &other);
-  bool contains(const HyperPoint &point);
-  void adjust_with_hrect(const HyperRectangle<N> &other);
-  void adjust_with_hpoint(const HyperPoint &point);
-  pair<HyperPoint, HyperPoint> get_boundaries();
+  HyperRectangle(HyperPoint<T, N> &A, HyperPoint<T, N> &B, bool is_data = false);
+  HyperPoint<T, N>& operator[](size_t index);
+  HyperRectangle<T, N>& operator=(const HyperRectangle<T, N>& other);
+  void insert_data(HyperPoint<T, N> *point);
+  bool overlaps(const HyperRectangle<T, N> &other);
+  bool contains(const HyperPoint<T, N> &point);
+  void adjust(const HyperRectangle<T, N> &other);
+  pair<HyperPoint<T, N>, HyperPoint<T, N>> get_boundaries();
   double get_hypervolume();
+  bool data_container();
+  void show_data();
 
 private:
-  HyperPoint bottom_left, top_right;
+  HyperPoint<T, N> bottom_left, top_right;
+  vector<HyperPoint<T, N>*> data;
+  bool is_data;
 };
 
-template<size_t N>
-HyperRectangle<N>::HyperRectangle() {
-  bottom_left.reset(N);
-  top_right.reset(N);
+template<typename T, size_t N>
+HyperRectangle<T, N>::HyperRectangle() {
+  is_data = false;
 }
 
-template<size_t N>
-HyperRectangle<N>::HyperRectangle(HyperPoint minBound, HyperPoint maxBound) {
+template<typename T, size_t N>
+HyperRectangle<T, N>::HyperRectangle(HyperPoint<T, N> &A, HyperPoint<T, N> &B, bool is_data) {
+  for (size_t i(0); i < N; ++i) {
+    bottom_left[i] = min(A[i], B[i]);
+    top_right[i] = max(A[i], B[i]);
+  }
+  this->is_data = is_data;
+  if (is_data) {
+    data.resize(2);
+    data[0] = &A;
+    data[1] = &B;
+  }
+}
+
+template<typename T, size_t N>
+HyperPoint<T, N>& HyperRectangle<T, N>::operator[](size_t index) {
+  return data[index];
+}
+
+template<typename T, size_t N>
+HyperRectangle<T, N>& HyperRectangle<T, N>::operator=(const HyperRectangle<T, N>& other) {
+  bottom_left = other.bottom_left;
+  top_right = other.top_right;
+  is_data = other.is_data;
+  if (is_data) {
+    for (size_t i(0); i < other.data.size(); ++i)
+      data[i] = other.data[i];
+  }
+  return *this;
+}
+
+template<typename T, size_t N>
+void HyperRectangle<T, N>::insert_data(HyperPoint<T, N> *point) {
   try {
-    if (maxBound < minBound) {
-      throw runtime_error(ERROR_BND_VALUES);
+    if (!is_data) {
+      throw runtime_error(ERROR_NO_RECTDATA);
     }
     else {
-      bottom_left = minBound;
-      top_right = maxBound;
+      for (size_t i(0); i < N; ++i) {
+        bottom_left[i] = min((*point)[i], bottom_left[i]);
+        top_right[i] = max((*point)[i], top_right[i]);
+      }
+      data.push_back(point);
     }
   }
   catch (const exception &error) {
@@ -126,9 +172,9 @@ HyperRectangle<N>::HyperRectangle(HyperPoint minBound, HyperPoint maxBound) {
   }
 }
 
-template<size_t N>
-bool HyperRectangle<N>::isOverlaping(const HyperRectangle<N> &other) {
-  for (size_t i = 0; i < N; ++i) {
+template<typename T, size_t N>
+bool HyperRectangle<T, N>::overlaps(const HyperRectangle<T, N> &other) {
+  for (size_t i(0); i < N; ++i) {
     if (!(bottom_left[i] <= other.top_right[i] &&
           top_right[i] >= other.bottom_left[i])) {
       return false;
@@ -137,35 +183,49 @@ bool HyperRectangle<N>::isOverlaping(const HyperRectangle<N> &other) {
   return true;
 }
 
-template<size_t N>
-bool HyperRectangle<N>::contains(const HyperPoint &point) {
-
+template<typename T, size_t N>
+bool HyperRectangle<T, N>::contains(const HyperPoint<T, N> &point) {
+  for (size_t i(0); i < N; ++i) {
+    if (!(bottom_left[i] <= point[i] && point[i] <= top_right[i]))
+      return false;
+  }
+  return true;
 }
 
-template<size_t N>
-void HyperRectangle<N>::adjust_with_hrect(const HyperRectangle<N> &other) {
-  for (size_t i = 0; i < N; ++i) {
+template<typename T, size_t N>
+void HyperRectangle<T, N>::adjust(const HyperRectangle<T, N> &other) {
+  for (size_t i(0); i < N; ++i) {
     bottom_left[i] = min(other.bottom_left[i], bottom_left[i]);
     top_right[i] = max(other.top_right[i], top_right[i]);
   }
 }
 
-template<size_t N>
-void HyperRectangle<N>::adjust_with_hpoint(const HyperPoint &point) {
-
-}
-
-template<size_t N>
-pair<HyperPoint, HyperPoint> HyperRectangle<N>::get_boundaries() {
+template<typename T, size_t N>
+pair<HyperPoint<T, N>, HyperPoint<T, N>> HyperRectangle<T, N>::get_boundaries() {
   return make_pair(bottom_left, top_right);
 }
 
-template<size_t N>
-double HyperRectangle<N>::get_hypervolume() {
+template<typename T, size_t N>
+double HyperRectangle<T, N>::get_hypervolume() {
   double hypervolume = 1.0;
-  for (size_t i = 0; i < N; ++i) {
+  for (size_t i(0); i < N; ++i) {
     hypervolume *= abs(top_right[i] - bottom_left[i]);
   }
   return hypervolume;
 }
 
+template<typename T, size_t N>
+bool HyperRectangle<T, N>::data_container() {
+  return is_data;
+}
+
+template<typename T, size_t N>
+void HyperRectangle<T, N>::show_data() {
+  cout << "\t\tHyperRectangle<" << N << "> :   bottom_left: "; bottom_left.show_data(); cout << "\t\t\t\t\ttop_right: "; top_right.show_data();
+  if (is_data) {
+    cout << "\t\t\tDATA:\n";
+    for (HyperPoint<T, N>* &d : data) {
+      cout << "\t\t\t";  d->show_data();
+    }
+  }
+}
