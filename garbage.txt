@@ -123,6 +123,41 @@ double RPlus<T, N, M, ff>::MINMAXDIST(T p, const HyperRectangle<N> r) {
   }
   return sqrt(minmax);
 }
+
+/*
+  ALERT("__split_init__");
+  tuple<ENTRY_GROUP, ENTRY_GROUP, ENTRY_GROUP> partitioned_group = partition(&A->entries);
+  A = make_shared<Node>();
+  A->add(get<0>(partitioned_group));
+  shared_ptr<Node> B = make_shared<Node>();
+  B->add(get<1>(partitioned_group));
+  for (Entry &entry : get<2>(partitioned_group)) {
+    if (A->is_leaf()) {
+      A->add(entry);
+      B->add(entry);
+    }
+    else {
+      //split_node(entry.child);
+      //add the two newnodes to entry.child
+    }
+  }
+  ALERT("__repeated_entries__");
+  if (R == root) {
+    shared_ptr<Node> new_root = make_shared<Node>();
+    Entry en1(R), en2(N2);
+    new_root->add(en1); new_root->add(en2);
+    root = new_root;
+  }
+  else {
+    shared_ptr<Node> PR = R->parent;
+    Entry right_node_after_split(N2);
+    PR->add(right_node_after_split);
+    if (PR->get_size() > M) {
+      split_node(PR);
+    }
+  }
+  ALERT("__split_done__");*/
+
 ///////////tests/////////////////////
 {
     HyperPoint<double, 5> point(array<double, 5>{12, 1987, 15, 26, 12548.0256});

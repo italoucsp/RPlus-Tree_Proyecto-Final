@@ -14,7 +14,6 @@
 
 using namespace std;
 
-#define ENTRY_GROUP vector<Entry>
 #define ALERT(message) cout << message << endl;
 #define ERROR_M_N_VALUES "ERROR: The number of dimensions and/or the number of entries per node should be greater than 1."
 #define ERROR_FF_VALUE "ERROR: The value for fill factor should be between 1 and M."
