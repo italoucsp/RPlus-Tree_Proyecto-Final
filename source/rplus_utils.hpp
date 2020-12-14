@@ -1,16 +1,18 @@
-#include <iostream>
-#include <fstream>
-#include <memory>
 #include <algorithm>
-#include <vector>
-#include <stdexcept>
 #include <array>
-#include <utility>
-#include <stdarg.h>
-#include <iomanip> 
-#include <queue>
-#include <tuple>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <math.h>
+#include <memory>
+#include <queue>
+#include <sstream>
+#include <stdarg.h>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 using namespace std;
 
@@ -64,7 +66,8 @@ bool HyperPoint<T, N>::operator>(const HyperPoint<T, N> &other) const {
 
 template<typename T, size_t N>
 HyperPoint<T, N>& HyperPoint<T, N>::operator=(const HyperPoint<T, N>& other) {
-  for (size_t i(0); i < N; multidata[i] = other.multidata[i], ++i) {}
+  for (size_t i(0); i < N; ++i)
+    multidata[i] = other.multidata[i];
   return *this;
 }
 
@@ -98,21 +101,20 @@ HyperPoint<T, N> get_max(const HyperPoint<T, N> A, const HyperPoint<T, N> B) {
 template<typename T, size_t N>
 struct HyperRectangle {
   HyperRectangle();
-  HyperRectangle(HyperPoint<T, N> &A, HyperPoint<T, N> &B, bool is_data = false);
-  HyperPoint<T, N>& operator[](size_t index);
+  HyperRectangle(HyperPoint<T, N> &DATA, T fatness);
+  HyperRectangle(HyperPoint<T, N> &A, HyperPoint<T, N> &B);
   HyperRectangle<T, N>& operator=(const HyperRectangle<T, N>& other);
-  void insert_data(HyperPoint<T, N> *point);
   bool overlaps(const HyperRectangle<T, N> &other);
   bool contains(const HyperPoint<T, N> &point);
   void adjust(const HyperRectangle<T, N> &other);
   pair<HyperPoint<T, N>, HyperPoint<T, N>> get_boundaries();
   double get_hypervolume();
   bool data_container();
-  void show_data();
+  void show_rect();
 
 private:
   HyperPoint<T, N> bottom_left, top_right;
-  vector<HyperPoint<T, N>*> data;
+  HyperPoint<T, N> data;
   bool is_data;
 };
 
@@ -122,22 +124,22 @@ HyperRectangle<T, N>::HyperRectangle() {
 }
 
 template<typename T, size_t N>
-HyperRectangle<T, N>::HyperRectangle(HyperPoint<T, N> &A, HyperPoint<T, N> &B, bool is_data) {
+HyperRectangle<T, N>::HyperRectangle(HyperPoint<T, N> &DATA, T fatness) {
+  is_data = true;
+  data = DATA;
   for (size_t i(0); i < N; ++i) {
-    bottom_left[i] = min(A[i], B[i]);
-    top_right[i] = max(A[i], B[i]);
-  }
-  this->is_data = is_data;
-  if (is_data) {
-    data.resize(2);
-    data[0] = &A;
-    data[1] = &B;
+    bottom_left[i] = DATA[i] - fatness;
+    top_right[i] = DATA[i] + fatness;
   }
 }
 
 template<typename T, size_t N>
-HyperPoint<T, N>& HyperRectangle<T, N>::operator[](size_t index) {
-  return data[index];
+HyperRectangle<T, N>::HyperRectangle(HyperPoint<T, N> &A, HyperPoint<T, N> &B) {
+  is_data = false;
+  for (size_t i(0); i < N; ++i) {
+    bottom_left[i] = min(A[i], B[i]);
+    top_right[i] = max(A[i], B[i]);
+  }
 }
 
 template<typename T, size_t N>
@@ -146,29 +148,9 @@ HyperRectangle<T, N>& HyperRectangle<T, N>::operator=(const HyperRectangle<T, N>
   top_right = other.top_right;
   is_data = other.is_data;
   if (is_data) {
-    for (size_t i(0); i < other.data.size(); ++i)
-      data[i] = other.data[i];
+    data = other.data;
   }
   return *this;
-}
-
-template<typename T, size_t N>
-void HyperRectangle<T, N>::insert_data(HyperPoint<T, N> *point) {
-  try {
-    if (!is_data) {
-      throw runtime_error(ERROR_NO_RECTDATA);
-    }
-    else {
-      for (size_t i(0); i < N; ++i) {
-        bottom_left[i] = min((*point)[i], bottom_left[i]);
-        top_right[i] = max((*point)[i], top_right[i]);
-      }
-      data.push_back(point);
-    }
-  }
-  catch (const exception &error) {
-    ALERT(error.what());
-  }
 }
 
 template<typename T, size_t N>
@@ -208,7 +190,7 @@ template<typename T, size_t N>
 double HyperRectangle<T, N>::get_hypervolume() {
   double hypervolume = 1.0;
   for (size_t i(0); i < N; ++i) {
-    hypervolume *= abs(top_right[i] - bottom_left[i]);
+    hypervolume *= double(top_right[i] - bottom_left[i]);
   }
   return hypervolume;
 }
@@ -219,12 +201,21 @@ bool HyperRectangle<T, N>::data_container() {
 }
 
 template<typename T, size_t N>
-void HyperRectangle<T, N>::show_data() {
+void HyperRectangle<T, N>::show_rect() {
   cout << "\t\tHyperRectangle<" << N << "> :   bottom_left: "; bottom_left.show_data(); cout << "\t\t\t\t\ttop_right: "; top_right.show_data();
   if (is_data) {
-    cout << "\t\t\tDATA:\n";
-    for (HyperPoint<T, N>* &d : data) {
-      cout << "\t\t\t";  d->show_data();
-    }
+    cout << "\t\t\tDATA:\n" << "\t\t\t";
+    data.show_data();
+  }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template<typename T, size_t N>
+void read_data_from_file(string file_path, vector<HyperRectangle<T, N>> &db_container) {
+  ifstream data_set_file(file_path);
+  string single_line;
+  while (!data_set_file.eof()) {
+
   }
 }
