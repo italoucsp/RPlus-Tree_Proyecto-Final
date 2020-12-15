@@ -42,17 +42,21 @@ int build_data_structure() {
   return 0;
 }
 
+int query_knn() {
+  return 0;
+}
+
 int main() {
-  RPlus<double, 2, 3, 1> demo_1;
+  RPlus<double, 2, 3, 3> demo_1;
   HyperPoint<double, 2> p1(array<double, 2>{1.2,5.3}), p2(array<double, 2>{4.9, 2.7}), p3(array<double, 2>{4.8, 25.2}), p4(array<double, 2>{8.8, 12.4});
-  HyperRectangle<double, 2> rect1(p1, 0.1);
-  HyperRectangle<double, 2> rect2(p2, 0.1);
-  HyperRectangle<double, 2> rect3(p3, 0.1);
-  HyperRectangle<double, 2> rect4(p4, 0.1);
+  HyperRectangle<double, 2> rect1(p1, 0.01);
+  HyperRectangle<double, 2> rect2(p2, 0.01);
+  HyperRectangle<double, 2> rect3(p3, 0.01);
+  HyperRectangle<double, 2> rect4(p4, 0.01);
   vector<HyperRectangle<double, 2>> pd = {rect1, rect2, rect3, rect4};
   demo_1.insert(pd);
-  ALERT("insertion_done");
+  SAY("insertion_done");
   demo_1.read_tree();
-  ALERT("done");
+  SAY("done");
   return 0;
 }

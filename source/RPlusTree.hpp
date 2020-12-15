@@ -2,10 +2,11 @@
 
 #define GET_BOUNDARIES(entry) entry.get_mbr().get_boundaries()
 
-/*TPLT: data type | number of dimensions | max entries per node | fill factor(by default = M / 2)
+/*TEMPLATE PARAMETERS: (1)data type | (2)number of dimensions | (3)max entries per node | (4)fill factor(by default = 2)
   Contains: Node, Entry, comparators(ENTRYSINGLEDIM, ENTRYDIST)
-  Operations that you are able to do: insertion, range query, k-nearest neighbors query.*/
-template<typename T, size_t N, size_t M, size_t ff = M / 2>
+  Approach: Packed Static R+ Tree
+  Operations that you are able to do: insertion(massive), range query, k-nearest neighbors query.*/
+template<typename T, size_t N, size_t M, size_t ff = 2>
 class RPlus {
 private:
   struct Node;
@@ -61,7 +62,7 @@ private:
     void add(vector<Entry> &S);
     size_t get_size();
     void resize(size_t new_size);
-    void print_node();
+    void print_node(bool rp_root = false);
   private:
     size_t size;
   };
@@ -70,7 +71,7 @@ private:
 
   vector<HyperPoint<T, N>> hidden_search(shared_ptr<Node> &R, const HyperRectangle<T, N> &W, vector<HyperPoint<T, N>> &data_found);
   shared_ptr<Node> split_node(shared_ptr<Node> &A, size_t axis, T optimal_cutline);
-  vector<Entry> partition(vector<Entry> &S, size_t &optimal_dim, T &optimal_cutline);
+  vector<Entry> partition(vector<Entry> &S, vector<Entry> &s_to_split, size_t &optimal_dim, T &optimal_cutline);
   void pack(vector<Entry> &S);
   pair<double, T> sweep(size_t axis, vector<Entry> &S);
   int min_number_splits(vector<Entry> &test_set, size_t axis, T optimal_cutline);//min splits
@@ -88,6 +89,7 @@ public:
 
 //===============================R-PLUS-TREE-IMPLEMENTATION============================================
 
+//BUILDER RPLUS
 template<typename T, size_t N, size_t M, size_t ff>
 RPlus<T, N, M, ff>::RPlus() {
   try {
@@ -95,7 +97,7 @@ RPlus<T, N, M, ff>::RPlus() {
     if (N < 2 || M < 2 || M > temp.max_size()) {
       throw runtime_error(ERROR_M_N_VALUES);
     }
-    else if (ff > M) {
+    else if (ff > M || ff < 2) {
       throw runtime_error(ERROR_FF_VALUE);
     }
     else {
@@ -104,15 +106,17 @@ RPlus<T, N, M, ff>::RPlus() {
   }
   catch (const exception &error) {
     ALERT(error.what());
+    exit(0);
   }
 }
 
+//ERASER RPLUS
 template<typename T, size_t N, size_t M, size_t ff>
 RPlus<T, N, M, ff>::~RPlus() {
   root.reset();
 }
 
-//INSERTION PUBLIC
+//INSERTION METHOD
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::insert(vector<HyperRectangle<T, N>> &unpacked_data) {
   try {
@@ -128,6 +132,7 @@ void RPlus<T, N, M, ff>::insert(vector<HyperRectangle<T, N>> &unpacked_data) {
   }
   catch (const exception &error) {
     ALERT(error.what());
+    exit(0);
   }
 }
 
@@ -145,17 +150,19 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::hidden_search(shared_ptr<Node> &R, 
   for (size_t i(0); i < R->get_size(); ++i) {
     if ((*R)[i].get_mbr().overlaps(W)) {
       if (!R->is_leaf()) {
-        hidden_search((*R)[i].child, W);
+        hidden_search((*R)[i].child, W, data_found);
       }
       else {
-        data_found.push_back(entry.data);
+        data_found.push_back(entry.data.get_data());
       }
     }
   }
   return data_found;
 }
 
-//KNN QUERY SEARCH PUBLIC AND ONLY THAT, BRANCH AND BOUND ALGORITHM
+/*KNN METHOD: k-Nearest Neighbors query using branch and bound algorithm with MINDIST function
+  PAPER: A. Papadopoulos, Y. Manolopoulos, "Performance of Nearest Neighbor Queries in R-trees *",
+         Department of Informatics Aristotle University - 54006 Thessaloniki , Greece */
 template<typename T, size_t N, size_t M, size_t ff>
 vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::kNN_query(HyperPoint<T, N> refdata, size_t k) {
   priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> best_branchs_queue;
@@ -167,7 +174,7 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::kNN_query(HyperPoint<T, N> refdata,
     if (!closest_entry.entry.is_in_leaf())
       push_node_in_queue(refdata, closest_entry.entry.child, best_branchs_queue);
     else {
-      kNN[i++] = *(closest_entry.entry.data);
+      kNN[i++] = closest_entry.entry.data.get_data();
       best_branchs_queue.pop();
     }
   }
@@ -183,38 +190,37 @@ void RPlus<T, N, M, ff>::push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr
   }
 }
 
-//SPLIT NODE METHOD
+/*SPLIT NODE METHOD: Division of a node in given axis and optimal cutline,
+                     then do downward propagation of the split.*/
 template<typename T, size_t N, size_t M, size_t ff>
 shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_node(shared_ptr<Node> &A, size_t axis, T optimal_cutline) {
   shared_ptr<Node> B = make_shared<Node>();
-  vector<Entry> set_A(M), set_B(M);
-  size_t a(0), b(0);
+  vector<Entry> set_A, set_B;
   for (size_t i(0); i < A->get_size(); ++i) {
-    if (GET_BOUNDARIES((*A)[i]).second[axis] <= optimal_cutline) set_A[a++] = (*A)[i];
-    else if (GET_BOUNDARIES((*A)[i]).first[axis] > optimal_cutline) set_B[b++] = (*A)[i];
+    if (GET_BOUNDARIES((*A)[i]).second[axis] < optimal_cutline)
+      set_A.push_back((*A)[i]);
+    else if (GET_BOUNDARIES((*A)[i]).first[axis] > optimal_cutline)
+      set_B.push_back((*A)[i]);
     else {
       if (A->is_leaf()) {
-        set_A[a++] = (*A)[i];
-        set_B[b++] = (*A)[i];
+        pair<HyperRectangle<T, N>, HyperRectangle<T, N>> cutted_hyper_rect = (*A)[i].data.cut(axis, optimal_cutline);
+        set_A.emplace_back(cutted_hyper_rect.first);
+        set_B.emplace_back(cutted_hyper_rect.second);
       }
       else {
-        set_B[b++] = Entry(split_node((*A)[i].child, axis, optimal_cutline));
-        set_A[a++] = (*A)[i];
+        set_B.emplace_back(split_node((*A)[i].child, axis, optimal_cutline));
+        set_A.emplace_back((*A)[i].child);
       }
     }
   }
-  A->resize(a); A->entries.clear(); A->entries.swap(set_A);
-  B->resize(b); B->entries.clear(); B->entries.swap(set_B);
-  ALERT("__splitted__");
-  A->print_node();
-  B->print_node();
-  ALERT("__splitted__");
+  A->resize(0); A->add(set_A);
+  B->resize(0); B->add(set_B);
   return B;
 }
 
 //PARTITION METHOD
 template<typename T, size_t N, size_t M, size_t ff>
-vector<typename RPlus<T, N, M, ff>::Entry> RPlus<T, N, M, ff>::partition(vector<Entry> &S, size_t &optimal_dim, T &optimal_cutline) {
+vector<typename RPlus<T, N, M, ff>::Entry> RPlus<T, N, M, ff>::partition(vector<Entry> &S, vector<Entry> &s_to_split, size_t &optimal_dim, T &optimal_cutline) {
   if (S.size() <= ff) {
     vector<Entry> nn_set;
     nn_set.swap(S);
@@ -225,7 +231,7 @@ vector<typename RPlus<T, N, M, ff>::Entry> RPlus<T, N, M, ff>::partition(vector<
   optimal_cutline = 0;
   //sweep and find the best partition cutline/axis
   for (size_t current_dim(0); current_dim < N; ++current_dim) {
-    pair<double, double> cost_and_cutline = sweep(current_dim, S);//sweep in any dimension
+    pair<double, T> cost_and_cutline = sweep(current_dim, S);
     double temp_min_cost = cheapest_cost;
     cheapest_cost = min(cost_and_cutline.first, cheapest_cost);
     if (cheapest_cost != temp_min_cost) {
@@ -233,13 +239,14 @@ vector<typename RPlus<T, N, M, ff>::Entry> RPlus<T, N, M, ff>::partition(vector<
       optimal_dim = current_dim;
     }
   }
-  ALERT("_pick_remainder_")
   vector<Entry> only_new_group, remainder_entries;
-  for (Entry &entry : S) {
+  for (Entry entry : S) {
     if (GET_BOUNDARIES(entry).second[optimal_dim] <= optimal_cutline)
       only_new_group.push_back(entry);
-    else
+    else if (GET_BOUNDARIES(entry).first[optimal_dim] > optimal_cutline)
       remainder_entries.push_back(entry);
+    else
+      s_to_split.push_back(entry);
   }
   S.clear(); S.swap(remainder_entries);
   return only_new_group;
@@ -249,34 +256,34 @@ vector<typename RPlus<T, N, M, ff>::Entry> RPlus<T, N, M, ff>::partition(vector<
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::pack(vector<Entry> &S) {
   if (S.size() <= ff) {
-    root = make_shared<Node>();
+    if(!root)
+      root = make_shared<Node>();
     root->add(S);
     return;
   }
-  ALERT("__pack_init__")
-  vector<Entry> next_level_upward;
+  vector<Entry> next_level_upward, s_to_split;
   size_t axis;
   T cutline;
   while (!S.empty()) {
-    ALERT("while");
-    vector<Entry> current_tff_set(partition(S, axis, cutline));//new set S, given cutline and axis
-    for (Entry &entry : S) {
-      if (GET_BOUNDARIES(entry).first[axis] < cutline && GET_BOUNDARIES(entry).second[axis] > cutline) {
+    vector<Entry> current_tff_set(partition(S, s_to_split, axis, cutline));//new set S, given cutline and axis
+    if (!s_to_split.empty()) {
+      for (Entry entry : s_to_split) {
         if (!entry.is_in_leaf()) {
-          ALERT("__split_init__")
-          S.push_back(Entry(split_node(entry.child, axis, cutline)));
-          ALERT("__split_end__")
-          entry.show_entry(0);
-          current_tff_set.push_back(entry);
-          ALERT("__sure__")
+          S.emplace_back(split_node(entry.child, axis, cutline));
+          current_tff_set.emplace_back(entry.child);
+        }
+        else {
+          pair<HyperRectangle<T, N>, HyperRectangle<T, N>> cutted_hyper_rect = entry.data.cut(axis, cutline);
+          current_tff_set.emplace_back(cutted_hyper_rect.first);
+          S.emplace_back(cutted_hyper_rect.second);
         }
       }
+      s_to_split.clear();
     }
     shared_ptr<Node> new_node = make_shared<Node>();
     new_node->add(current_tff_set);
-    next_level_upward.push_back(Entry(new_node));
+    next_level_upward.emplace_back(new_node);
   }
-  ALERT("__pack_end__");
   pack(next_level_upward);
 }
 
@@ -285,7 +292,7 @@ template<typename T, size_t N, size_t M, size_t ff>
 pair<double, T> RPlus<T, N, M, ff>::sweep(size_t axis, vector<Entry> &S) {
   comparator_ENTRYSINGLEDIM comparator(axis);
   partial_sort(S.begin(), S.begin() + ff, S.end(), comparator);//sort the first ff entries to "sweep" -> O(n log ff)
-  vector<Entry> test_set(S.begin(), S.begin() + ff);//picking the ff firsts entries of the sorted set
+  vector<Entry> test_set(S.begin(), S.begin() + ff);//picking the ff first entries of the sorted set
   T optimal_cutline = GET_BOUNDARIES(test_set.back()).second[axis];
   return make_pair(min_number_splits(test_set, axis, optimal_cutline), optimal_cutline);
 }
@@ -301,7 +308,7 @@ int RPlus<T, N, M, ff>::min_number_splits(vector<Entry> &test_set, size_t axis, 
   return cost;
 }
 
-//DIST TO NEAREST SIDE OF HYPERECTANGLE
+//DIST TO NEAREST SIDE OF AN HYPERECTANGLE
 template<typename T, size_t N, size_t M, size_t ff>
 double RPlus<T, N, M, ff>::MINDIST(HyperPoint<T, N> p, const HyperRectangle<T, N> r) {
   double sum = 0.0;
@@ -314,9 +321,27 @@ double RPlus<T, N, M, ff>::MINDIST(HyperPoint<T, N> p, const HyperRectangle<T, N
   return sqrt(sum);
 }
 
+//READ R+ TREE METHOD: Using bfs to read the levels of the tree since the root.
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::read_tree() {
-  root->print_node();
+  if (root) {
+    root->print_node(true);
+    queue<shared_ptr<Node>> bfs_q;
+    for (size_t i(0); i < root->get_size(); ++i) {
+      if ((*root)[i].child)
+        bfs_q.push((*root)[i].child);
+    }
+    while (!bfs_q.empty()) {
+      for (size_t i(0); i < bfs_q.front()->get_size(); ++i) {
+        if ((*bfs_q.front())[i].child)
+          bfs_q.push((*bfs_q.front())[i].child);
+      }
+      bfs_q.front()->print_node();
+      bfs_q.pop();
+    }
+  }
+  else
+    cout << "The r+ tree is empty.\n";
 }
 
 //========================================NODE-IMPLEMENTATION==========================================
@@ -344,18 +369,29 @@ typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Node::operator[](size_t 
   }
   catch (const exception &error) {
     ALERT(error.what());
+    exit(0);
   }
   return entries[0];
 }
 
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::Node::add(Entry &IR) {
-  mbr.adjust(IR.get_mbr());
+  if (size == 0)
+    mbr = IR.get_mbr();
+  else
+    mbr.adjust(IR.get_mbr());
   entries[size++] = IR;
 }
 
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::Node::add(vector<Entry> &S) {
+  if (max(S.size(), M) == S.size()) {
+    entries.resize(S.size());
+  }
+  else {
+    if (entries.size() == 0)
+      entries.resize(M);
+  }
   for (Entry &entry : S)
     add(entry);
 }
@@ -371,10 +407,13 @@ void RPlus<T, N, M, ff>::Node::resize(size_t new_size) {
 }
 
 template<typename T, size_t N, size_t M, size_t ff>
-void RPlus<T, N, M, ff>::Node::print_node() {
+void RPlus<T, N, M, ff>::Node::print_node(bool rp_root) {
   cout << "\tNODE : size(" << size << ") = [" << endl;
-  cout << "\t\tID : " << this << endl;
-  cout << "\t\tType : " << ((is_leaf())?"LEAF":"INTERNAL") << endl;
+  cout << "\t\tA. ID : " << this << endl;
+  cout << "\t\tB. Type : " << ((rp_root)? "ROOT" :((is_leaf())?"LEAF":"INTERNAL")) << endl;
+  cout << "\t\tC. Boundaries : \n";
+  mbr.show_rect();
+  cout << "\t\tD. Entries : \n";
   for (size_t i(0); i < size; ++i) {
     (*this)[i].show_entry(i + 1);
   }
@@ -413,7 +452,7 @@ typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Entry::operator=(const E
 
 template<typename T, size_t N, size_t M, size_t ff>
 HyperRectangle<T, N> RPlus<T, N, M, ff>::Entry::get_mbr() {
-  if (child) {
+  if (!is_in_leaf()) {
     return child->mbr;
   }
   return data;
@@ -427,7 +466,7 @@ bool RPlus<T, N, M, ff>::Entry::is_in_leaf() {
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::Entry::show_entry(size_t index) {
   cout << "\t\tEntry<" << index << ">{\n";
-  data.show_rect();
+  get_mbr().show_rect();
   cout << "\t\tChild : " << child << endl;
   cout << "\t\t}\n";
 }
