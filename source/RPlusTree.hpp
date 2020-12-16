@@ -5,7 +5,7 @@
 /*TEMPLATE PARAMETERS: (1)data type | (2)number of dimensions | (3)max entries per node | (4)fill factor(by default = 2)
   Contains: Node, Entry, comparators(ENTRYSINGLEDIM, ENTRYDIST)
   Approach: Packed Static R+ Tree
-  Operations that you are able to do: insertion(massive), range query, k-nearest neighbors query.*/
+  Operations that you are able to do: insertion(insert,"massive"), range query(search), k-nearest neighbors query(kNN_query).*/
 template<typename T, size_t N, size_t M, size_t ff = 2>
 class RPlus {
 private:
@@ -31,7 +31,7 @@ private:
       this->axis = axis;
     }
     bool operator() (Entry &A, Entry &B) {
-      return (A.get_mbr().get_boundaries().first[axis] < B.get_mbr().get_boundaries().first[axis]);
+      return (GET_BOUNDARIES(A).first[axis] < GET_BOUNDARIES(B).first[axis]);
     }
   };
 
@@ -40,7 +40,7 @@ private:
     Entry entry;//Object
     ENTRYDIST(HyperPoint<T, N> &p, Entry &md_obj){
       entry = md_obj;
-      distance = MINDIST(p, md_obj.get_mbr());//Roussopoulos said that a R tree with minimun overlap don't need MINMAXDIST, and R+ ... don't have overlap so...
+      distance = RPlus::MINDIST(p, md_obj.get_mbr());//Roussopoulos said that a R tree with minimun overlap don't need MINMAXDIST, and R+ ... don't have overlap so...
     }
   };
 
@@ -69,18 +69,17 @@ private:
 
   shared_ptr<Node> root;
 
-  vector<HyperPoint<T, N>> hidden_search(shared_ptr<Node> &R, const HyperRectangle<T, N> &W, vector<HyperPoint<T, N>> &data_found);
   shared_ptr<Node> split_node(shared_ptr<Node> &A, size_t axis, T optimal_cutline);
   vector<Entry> partition(vector<Entry> &S, vector<Entry> &s_to_split, size_t &optimal_dim, T &optimal_cutline);
   void pack(vector<Entry> &S);
-  pair<double, T> sweep(size_t axis, vector<Entry> &S);
-  int min_number_splits(vector<Entry> &test_set, size_t axis, T optimal_cutline);//min splits
-  double MINDIST(HyperPoint<T, N> p, const HyperRectangle<T, N> r);
-  void push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr<Node> &current, priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> &q_NN);
+  inline pair<double, T> sweep(size_t axis, vector<Entry> &S);
+  inline int min_number_splits(vector<Entry> &test_set, size_t axis, T optimal_cutline);//min splits
+  static double MINDIST(HyperPoint<T, N> p, HyperRectangle<T, N> r);
+  inline void push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr<Node> &current, priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> &q_NN);
 
 public:
   RPlus();
-  ~RPlus();
+  virtual ~RPlus();
   void insert(vector<HyperRectangle<T, N>> &unpacked_data);
   vector<HyperPoint<T, N>> search(const HyperRectangle<T, N> &W);
   vector<HyperPoint<T, N>> kNN_query(HyperPoint<T, N> refdata, size_t k);
@@ -139,25 +138,39 @@ void RPlus<T, N, M, ff>::insert(vector<HyperRectangle<T, N>> &unpacked_data) {
 //RANGE QUERY SEARCH PUBLIC
 template<typename T, size_t N, size_t M, size_t ff>
 vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::search(const HyperRectangle<T, N> &W) {
-  shared_ptr<Node> R = root;
-  vector<HyperPoint<T, N>> data_found;
-  return hidden_search(R, W, data_found);
-}
-
-//RANGE QUERY SEARCH PRIVATE
-template<typename T, size_t N, size_t M, size_t ff>
-vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::hidden_search(shared_ptr<Node> &R, const HyperRectangle<T, N> &W, vector<HyperPoint<T, N>> &data_found) {
-  for (size_t i(0); i < R->get_size(); ++i) {
-    if ((*R)[i].get_mbr().overlaps(W)) {
-      if (!R->is_leaf()) {
-        hidden_search((*R)[i].child, W, data_found);
+  try {
+    if (!root) {
+      throw runtime_error(ERROR_EMPTY_TREE);
+    }
+    else {     
+      vector<HyperPoint<T, N>> range_query;
+      unordered_set<string> songs_names;
+      stack<shared_ptr<Node>> dfs_s;
+      dfs_s.push(root);
+      while (!dfs_s.empty()) {
+        for (size_t i(0); i < dfs_s.top()->get_size(); ++i) {
+          if ((*dfs_s.top())[i].get_mbr().overlaps(W)) {
+            if (!dfs_s.top()->is_leaf())
+              dfs_s.push((*dfs_s.top())[i].child);
+            else {
+              size_t temp_songs_names_size = songs_names.size();
+              //try pick data
+              songs_names.insert((*dfs_s.top())[i].data.get_data().get_songs_name());
+              if (temp_songs_names_size != songs_names.size())
+                range_query.push_back((*dfs_s.top())[i].data.get_data());
+              //end try
+            }
+          }
+        }
+        dfs_s.pop();
       }
-      else {
-        data_found.push_back(entry.data.get_data());
-      }
+      return range_query;
     }
   }
-  return data_found;
+  catch (const exception &error) {
+    ALERT(error.what())
+    exit(0);
+  }
 }
 
 /*KNN METHOD: k-Nearest Neighbors query using branch and bound algorithm with MINDIST function
@@ -165,27 +178,44 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::hidden_search(shared_ptr<Node> &R, 
          Department of Informatics Aristotle University - 54006 Thessaloniki , Greece */
 template<typename T, size_t N, size_t M, size_t ff>
 vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::kNN_query(HyperPoint<T, N> refdata, size_t k) {
-  priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> best_branchs_queue;
-  vector<HyperPoint<T, N>> kNN(k);
-  push_node_in_queue(refdata, root, best_branchs_queue);
-  size_t i = size_t(0);
-  while (i < k && !best_branchs_queue.empty()) {
-    ENTRYDIST closest_entry = best_branchs_queue.top();
-    if (!closest_entry.entry.is_in_leaf())
-      push_node_in_queue(refdata, closest_entry.entry.child, best_branchs_queue);
+  try {
+    if (!root) {
+      throw runtime_error(ERROR_EMPTY_TREE);
+    }
     else {
-      kNN[i++] = closest_entry.entry.data.get_data();
-      best_branchs_queue.pop();
+      priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> best_branchs_queue;
+      vector<HyperPoint<T, N>> kNN(k);
+      unordered_set<string> songs_names;
+      push_node_in_queue(refdata, root, best_branchs_queue);
+      size_t i = size_t(0);
+      while (i < k && !best_branchs_queue.empty()) {
+        ENTRYDIST closest_entry = best_branchs_queue.top();
+        if (!closest_entry.entry.is_in_leaf())
+          push_node_in_queue(refdata, closest_entry.entry.child, best_branchs_queue);
+        else {
+          size_t temp_songs_names_size = songs_names.size();
+          //try pick k(i) nn
+          songs_names.insert(closest_entry.entry.data.get_data().get_songs_name());
+          if(temp_songs_names_size != songs_names.size())
+            kNN[i++] = closest_entry.entry.data.get_data();
+          //end try
+          best_branchs_queue.pop();
+        }
+      }
+      return kNN;
     }
   }
-  return kNN;
+  catch (const exception &error) {
+    ALERT(error.what())
+    exit(0);
+  }
 }
 
 //PUSH EACH ENTRY OF A NODE IN THE PRIORITY QUEUE
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr<Node> &current, priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> &q_NN) {
-  for (size_t i = size_t(0); i < current->size; ++i) {
-    ENTRYDIST packed_entry(refdata, current->entries[i]);
+  for (size_t i = size_t(0); i < current->get_size(); ++i) {
+    ENTRYDIST packed_entry(refdata, (*current)[i]);
     q_NN.push(packed_entry);
   }
 }
@@ -194,6 +224,7 @@ void RPlus<T, N, M, ff>::push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr
                      then do downward propagation of the split.*/
 template<typename T, size_t N, size_t M, size_t ff>
 shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_node(shared_ptr<Node> &A, size_t axis, T optimal_cutline) {
+  SAY("SPLIT CAGADA")
   shared_ptr<Node> B = make_shared<Node>();
   vector<Entry> set_A, set_B;
   for (size_t i(0); i < A->get_size(); ++i) {
@@ -310,7 +341,7 @@ int RPlus<T, N, M, ff>::min_number_splits(vector<Entry> &test_set, size_t axis, 
 
 //DIST TO NEAREST SIDE OF AN HYPERECTANGLE
 template<typename T, size_t N, size_t M, size_t ff>
-double RPlus<T, N, M, ff>::MINDIST(HyperPoint<T, N> p, const HyperRectangle<T, N> r) {
+double RPlus<T, N, M, ff>::MINDIST(HyperPoint<T, N> p, HyperRectangle<T, N> r) {
   double sum = 0.0;
   for (size_t i = size_t(0); i < N; ++i) {
     if (p[i] < r.get_boundaries().first[i])
@@ -368,10 +399,9 @@ typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Node::operator[](size_t 
     }
   }
   catch (const exception &error) {
-    ALERT(error.what());
+    ALERT(error.what())
     exit(0);
   }
-  return entries[0];
 }
 
 template<typename T, size_t N, size_t M, size_t ff>
@@ -385,15 +415,17 @@ void RPlus<T, N, M, ff>::Node::add(Entry &IR) {
 
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::Node::add(vector<Entry> &S) {
-  if (max(S.size(), M) == S.size()) {
+  if (max(S.size(), M) == S.size())
     entries.resize(S.size());
-  }
-  else {
+  else
     if (entries.size() == 0)
       entries.resize(M);
-  }
-  for (Entry &entry : S)
+  for (Entry &entry : S) {
+    if (!entry.is_in_leaf()) {
+      entry.data.disable_data();
+    }
     add(entry);
+  }
 }
 
 template<typename T, size_t N, size_t M, size_t ff>
@@ -453,6 +485,7 @@ typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Entry::operator=(const E
 template<typename T, size_t N, size_t M, size_t ff>
 HyperRectangle<T, N> RPlus<T, N, M, ff>::Entry::get_mbr() {
   if (!is_in_leaf()) {
+    child->mbr.disable_data();
     return child->mbr;
   }
   return data;
