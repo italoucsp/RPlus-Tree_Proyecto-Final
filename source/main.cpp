@@ -51,31 +51,24 @@ int main() {
   HyperPoint<double, 2> p1(array<double, 2>{1.2, 5.3}, "dwe"), p2(array<double, 2>{4.9, 2.7}, "ade"), p3(array<double, 2>{4.8, 25.2}, "dde"), p4(array<double, 2>{8.8, 12.4}, "zde");
   HyperPoint<double, 2> p5(array<double, 2>{15.2, 6.3}, "dfe"), p6(array<double, 2>{102.5, 77.7}, "bde"), p7(array<double, 2>{-6.8, -2.45}, "ede"), p8(array<double, 2>{-18.9, -17.12}, "xde");
   HyperPoint<double, 2> p9(array<double, 2>{5.2, 5.4}, "det"), p10(array<double, 2>{4.8, 33.7}, "cde"), p11(array<double, 2>{4.5, 25.01}, "gde"), p12(array<double, 2>{7.8, 12.5}, "yde");
-  HyperRectangle<double, 2> rect1(p1, 1);
-  HyperRectangle<double, 2> rect2(p2, 1);
-  HyperRectangle<double, 2> rect3(p3, 1);
-  HyperRectangle<double, 2> rect4(p4, 1);
-  HyperRectangle<double, 2> rect5(p5, 1);
-  HyperRectangle<double, 2> rect6(p6, 1);
-  HyperRectangle<double, 2> rect7(p7, 1);
-  HyperRectangle<double, 2> rect8(p8, 1);
-  HyperRectangle<double, 2> rect9(p9, 1);
-  HyperRectangle<double, 2> rect10(p10, 1);
-  HyperRectangle<double, 2> rect11(p11, 1);
-  HyperRectangle<double, 2> rect12(p12, 1);
-  vector<HyperRectangle<double, 2>> pd = { rect1, rect2, rect3, rect4,rect5, rect6, rect7, rect8,rect9, rect10, rect11, rect12 };
-  demo_1.insert(pd);
+
+  vector<HyperPoint<double, 2>> data_sp = { p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12 };
+  demo_1.insert(data_sp);
   SAY("insertion_done");
   demo_1.read_tree();
   SAY("done");
+  SAY("range");
   HyperPoint<double, 2> pr(array<double, 2>{1.3, 5.5});
-  HyperRectangle<double, 2> W(p11, 5);
+  HyperRectangle<double, 2> W(p1,p5);
   for (auto res : demo_1.search(W)) {
     res.show_data();
   }
+  SAY("done");
+  SAY("knn");
   for (auto res : demo_1.kNN_query(pr, 5)) {
     res.show_data();
   }
+  SAY("done");
   /*
   vector<HyperRectangle<double, KUSED_DIMENSIONS>> DB_CONTAINER;
   vector<string> considered_features = { "name", "acousticness", "danceability", "duration_ms", "energy",

@@ -1,3 +1,10 @@
+if (data_container()) {
+    cout << "\t\t\tDATA :\n" << "\t\t\t";
+    data.top().show_data();
+    cout << "\t\t\tSONG\'S NAME : "; cout << data.top().get_songs_name() << endl;
+  }
+
+
 template<typename DATA_TYPE, size_t N, size_t M, size_t ff>
 shared_ptr<typename RPlus<DATA_TYPE, N, M, ff>::Node> RPlus<DATA_TYPE, N, M, ff>::pack(ENTRY_GROUP &S) {
   if (S.size() <= ff) {

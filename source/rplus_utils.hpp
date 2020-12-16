@@ -31,7 +31,6 @@ using namespace std;
 #define ERROR_M_N_VALUES "The number of dimensions and/or the number of entries per node should be greater than 1."
 #define ERROR_FF_VALUE "The value for fill factor should be between 2 and M."
 #define ERROR_NODE_OFR "The index is out of range in the node."
-#define ERROR_NO_RECTDATA "This rectangle is not a data container."
 #define ERROR_EMPTY_TREE "This R+ Tree is empty."
 
 const size_t T_DIMENSIONS_NUM = 19;
@@ -135,37 +134,26 @@ HyperPoint<T, N> get_max(const HyperPoint<T, N> A, const HyperPoint<T, N> B) {
 template<typename T, size_t N>
 struct HyperRectangle {
   HyperRectangle();
-  HyperRectangle(HyperPoint<T, N> &DATA, T fatness);
   HyperRectangle(HyperPoint<T, N> &A, HyperPoint<T, N> &B);
   HyperRectangle<T, N>& operator=(const HyperRectangle<T, N>& other);
-  HyperPoint<T, N> get_data();
   bool overlaps(const HyperRectangle<T, N> &other);
   bool contains(const HyperPoint<T, N> &point);
   void adjust(const HyperRectangle<T, N> &other);
   pair<HyperRectangle<T, N>, HyperRectangle<T, N>> cut(size_t axis, T cutline);
   pair<HyperPoint<T, N>, HyperPoint<T, N>> get_boundaries();
   double get_hypervolume();
-  bool data_container();
-  void disable_data();
   void show_rect();
+
+  template<typename T, size_t N>
+  friend HyperRectangle<T, N> make_hyper_rect(HyperPoint<T, N> &h_point);
 
 private:
   HyperPoint<T, N> bottom_left, top_right;
-  stack<HyperPoint<T, N>> data;
 };
 
 template<typename T, size_t N>
 HyperRectangle<T, N>::HyperRectangle() {
   //...
-}
-
-template<typename T, size_t N>
-HyperRectangle<T, N>::HyperRectangle(HyperPoint<T, N> &DATA, T fatness) {
-  data.push(DATA);
-  for (size_t i(0); i < N; ++i) {
-    bottom_left[i] = DATA[i] - fatness;
-    top_right[i] = DATA[i] + fatness;
-  }
 }
 
 template<typename T, size_t N>
@@ -180,24 +168,7 @@ template<typename T, size_t N>
 HyperRectangle<T, N>& HyperRectangle<T, N>::operator=(const HyperRectangle<T, N>& other) {
   bottom_left = other.bottom_left;
   top_right = other.top_right;
-  if (!other.data.empty())
-    if (data.empty())
-      data.push(other.data.top());
   return *this;
-}
-
-template<typename T, size_t N>
-HyperPoint<T, N> HyperRectangle<T, N>::get_data() {
-  try {
-    if (!data_container())
-      throw runtime_error(ERROR_NO_RECTDATA);
-    else
-      return data.top();
-  }
-  catch (const exception &error) {
-    ALERT(error.what());
-    exit(0);
-  }
 }
 
 template<typename T, size_t N>
@@ -233,10 +204,6 @@ pair<HyperRectangle<T, N>, HyperRectangle<T, N>> HyperRectangle<T, N>::cut(size_
   HyperPoint<T, N> f_top_right = top_right, s_bottom_left = bottom_left;
   f_top_right[axis] = s_bottom_left[axis] = cutline;
   HyperRectangle<T, N> half_part_f(bottom_left, f_top_right), half_part_s(s_bottom_left, top_right);
-  if (data_container()) {
-    half_part_f.data.push(data.top());
-    half_part_s.data.push(data.top());
-  }
   return make_pair(half_part_f, half_part_s);
 }
 
@@ -255,24 +222,16 @@ double HyperRectangle<T, N>::get_hypervolume() {
 }
 
 template<typename T, size_t N>
-bool HyperRectangle<T, N>::data_container() {
-  return !data.empty();
-}
-
-template<typename T, size_t N>
-void HyperRectangle<T, N>::disable_data() {
-  if (data_container())
-    data.pop();
-}
-
-template<typename T, size_t N>
 void HyperRectangle<T, N>::show_rect() {
-  cout << "\t\tHyperRectangle<" << N << "> :   bottom_left: "; bottom_left.show_data(); cout << "\t\t\t\t\ttop_right: "; top_right.show_data();
-  if (data_container()) {
-    cout << "\t\t\tDATA :\n" << "\t\t\t";
-    data.top().show_data();
-    cout << "\t\t\tSONG\'S NAME : "; cout << data.top().get_songs_name() << endl;
-  }
+  cout << "\t\tHyperRectangle<" << N << "> :   bottom_left: "; bottom_left.show_data();
+  cout << "\t\t\t\t\ttop_right: "; top_right.show_data();
+}
+
+template<typename T, size_t N>
+HyperRectangle<T, N> make_hyper_rect(HyperPoint<T, N> &h_point) {
+  HyperRectangle<T, N> conv;
+  conv.bottom_left = conv.top_right = h_point;
+  return conv;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -280,7 +239,7 @@ void HyperRectangle<T, N>::show_rect() {
 
 //CSV file reader : path of the file | features that were considered | container for the data in hyperrectangles
 template<typename T, size_t N>
-void read_data_from_file(string file_path, vector<string> &features, string id, vector<HyperRectangle<T, N>> &db_container) {
+void read_data_from_file(string file_path, vector<string> &features, string id, vector<HyperPoint<T, N>> &db_container) {
   string cols_labels, row_data_line;
   ifstream data_set_file(file_path);
   if (!data_set_file.is_open()) {
@@ -329,7 +288,7 @@ void read_data_from_file(string file_path, vector<string> &features, string id, 
       ++i;
     }
     HyperPoint<T, KUSED_DIMENSIONS> multidimensional_data(raw_multidimensional_data, songs_name);
-    db_container.emplace_back(multidimensional_data, T(0.001));
+    db_container.push_back(multidimensional_data);
   }
 
   data_set_file.close();
