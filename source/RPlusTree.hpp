@@ -3,8 +3,12 @@
 #define GET_BOUNDARIES(entry) entry.get_mbr().get_boundaries()
 
 /*TEMPLATE PARAMETERS: (1)data type | (2)number of dimensions | (3)max entries per node | (4)fill factor(by default = 2)
-  Contains: Node, Entry, comparators(ENTRYSINGLEDIM, ENTRYDIST)
-  Approach: Point R+ Tree
+  Contains: Node, Entry, comparators(ENTRYSINGLEDIM, ENTRYDIST).
+  Approach: P R+ Tree (Point R+ Tree non packed) - insertion 1x1 - knn query and range query using queues and stacks.
+  Features: No overlap (geometric and by saturation propagated split), structure to store hyperpoints, non repeatable data (because this structure store points).
+  Link: https://github.com/italoucsp/RPlus-Tree_Proyecto-Final.
+  Why not pack algorithm?: too (a lot) slow at first for entries more than 10k, Time Complexity: O(n^2/k log ff) aprox. 
+                           But samely I have the code with pack algorithm ("garbage.txt").
   Operations that you are able to do: insertion(insert,"1x1"), range query(search), k-nearest neighbors query(kNN_query).*/
 template<typename T, size_t N, size_t M, size_t ff = 2>
 class RPlus {
@@ -36,13 +40,13 @@ private:
 
   struct ENTRYDIST {
     double distance;//Priority criteria
-    Entry entry;//Object
+    Entry entry;//Object for the queue
     ENTRYDIST(HyperPoint<T, N> &p, Entry &md_obj){
       entry = md_obj;
       if(md_obj.get_mbr().get_hypervolume() > 0)
-        distance = RPlus::MINDIST(p, md_obj.get_mbr());//Roussopoulos : An R tree with minimun overlap don't need MINMAXDIST function, and R+ ... don't have overlap so...
+        distance = RPlus::MINDIST(p, md_obj.get_mbr());//page 5, rule 3, line 5 to 7 - Roussopoulos et al. suggest that when the overlap is small...
       else
-        distance = RPlus::EUCDIST(p, md_obj.data);
+        distance = RPlus::EUCDIST(p, md_obj.data);//If the entry is in leaf, then use euclidean distance because the distance is now between hyperpoints
     }
   };
 
@@ -74,13 +78,12 @@ private:
   shared_ptr<Node> choose_leaf(Entry &entry, stack<shared_ptr<Node>> &parents);
   shared_ptr<Node> split_by_parent_cut(shared_ptr<Node> &A, size_t axis, T optimal_cutline);
   shared_ptr<Node> split_by_saturation(shared_ptr<Node> &A);
-  //void force_split(vector<Entry> &current_tff_set, vector<Entry> &remainder_entries);
   inline void partition(shared_ptr<Node> &danger_node, size_t &optimal_dim, T &optimal_cutline);
   inline pair<double, T> sweep(size_t axis, vector<Entry> &S);
-  inline int min_number_splits(vector<Entry> &test_set, size_t axis, T optimal_cutline);//min splits
+  inline int min_number_splits(vector<Entry> &test_set, size_t axis, T optimal_cutline);
+  inline void push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr<Node> &current, priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> &q_NN);
   static double MINDIST(HyperPoint<T, N> p, HyperRectangle<T, N> r);
   static double EUCDIST(HyperPoint<T, N> p1, HyperPoint<T, N> p2);
-  inline void push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr<Node> &current, priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> &q_NN);
 
 public:
   RPlus();
@@ -93,7 +96,7 @@ public:
 
 //===============================R-PLUS-TREE-IMPLEMENTATION============================================
 
-//BUILDER RPLUS
+//BUILDER RPLUS: Create empty root
 template<typename T, size_t N, size_t M, size_t ff>
 RPlus<T, N, M, ff>::RPlus() {
   try {
@@ -114,13 +117,13 @@ RPlus<T, N, M, ff>::RPlus() {
   }
 }
 
-//ERASER RPLUS
+//DESTROYER RPLUS: Simple class destroyer
 template<typename T, size_t N, size_t M, size_t ff>
 RPlus<T, N, M, ff>::~RPlus() {
   root.reset();
 }
 
-//RANGE QUERY SEARCH PUBLIC
+//RANGE QUERY METHOD: Give an hyperrectangle W and get the entries that overlaps with it.
 template<typename T, size_t N, size_t M, size_t ff>
 vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::search(const HyperRectangle<T, N> &W) {
   try {
@@ -159,7 +162,7 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::search(const HyperRectangle<T, N> &
   }
 }
 
-/*KNN METHOD: k-Nearest Neighbors query using branch and bound algorithm with MINDIST function
+/*KNN METHOD: k-Nearest Neighbors query using branch and bound algorithm with MINDIST function.
   PAPER: A. Papadopoulos, Y. Manolopoulos, "Performance of Nearest Neighbor Queries in R-trees *",
          Department of Informatics Aristotle University - 54006 Thessaloniki , Greece */
 template<typename T, size_t N, size_t M, size_t ff>
@@ -197,7 +200,7 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::kNN_query(HyperPoint<T, N> refdata,
   }
 }
 
-//PUSH EACH ENTRY OF A NODE IN THE PRIORITY QUEUE
+//--PUSH EACH ENTRY OF A NODE IN THE PRIORITY QUEUE--
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr<Node> &current, priority_queue<ENTRYDIST, vector<ENTRYDIST>, comparator_ENTRYDIST> &q_NN) {
   for (size_t i = size_t(0); i < current->get_size(); ++i) {
@@ -206,7 +209,7 @@ void RPlus<T, N, M, ff>::push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr
   }
 }
 
-//INSERTION METHOD MASSIVE
+//ASSIGN METHOD: "Massive" insertion(1x1x(size of unpacked_data vector)). Give a list of hyperpoints (data) to insert in the R+
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::assign(vector<HyperPoint<T, N>> &unpacked_data) {
   for (HyperPoint<T, N> &hp : unpacked_data) {
@@ -215,12 +218,12 @@ void RPlus<T, N, M, ff>::assign(vector<HyperPoint<T, N>> &unpacked_data) {
   }
 }
 
-//INSERTION METHOD
+//INSERTION METHOD: Single insertion (1x1), need assign method to be called because it is private.
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::insert(Entry &entry) {
   stack<shared_ptr<Node>> parents;
   shared_ptr<Node> candidate_node = choose_leaf(entry, parents);
-  //if saturated node - else simple insert
+  //if saturated node ->split, else -> simple insert
   candidate_node->add(entry);
   if (candidate_node->get_size() > M) {
     parents.push(candidate_node);
@@ -244,7 +247,7 @@ void RPlus<T, N, M, ff>::insert(Entry &entry) {
   }
 }
 
-//CHOOSE SUBTREE METHOD
+//CHOOSE LEAF METHOD: Search the node to place the new entry and build a parent's path for split upward propagation
 template<typename T, size_t N, size_t M, size_t ff>
 shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::choose_leaf(Entry &entry, stack<shared_ptr<Node>> &parents) {
   shared_ptr<Node> candidate_node = root;
@@ -260,8 +263,8 @@ shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::choose_leaf(En
   return candidate_node;
 }
 
-/*SPLIT NODE METHOD: Division of a node in given axis and optimal cutline,
-                     then do downward propagation of the split.*/
+/*SPLIT BY PARENT'S CUT METHOD: Division of a node A in given axis and optimal cutline,
+                                then do downward propagation of the split by parent's cut.*/
 template<typename T, size_t N, size_t M, size_t ff>
 shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_by_parent_cut(shared_ptr<Node> &A, size_t axis, T cutline) {
   shared_ptr<Node> B = make_shared<Node>();
@@ -283,6 +286,9 @@ shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_by_paren
   return B;
 }
 
+/*SPLIT BY SATURATION METHOD: When a parent node was affected by split, this could be
+                              saturated (size of the node > M), so is neccessary a split
+                              with a new partition line.*/
 template<typename T, size_t N, size_t M, size_t ff>
 shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_by_saturation(shared_ptr<Node> &A) {
   size_t axis;
@@ -291,7 +297,7 @@ shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_by_satur
   return split_by_parent_cut(A, axis, cutline);
 }
 
-//PARTITION METHOD
+//PARTITION METHOD: Returns the best(min. cost) cutline and axis to split a saturated node using sweep.
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::partition(shared_ptr<Node> &danger_node, size_t &optimal_dim, T &optimal_cutline) {
   double cheapest_cost = numeric_limits<double>::max();
@@ -310,7 +316,8 @@ void RPlus<T, N, M, ff>::partition(shared_ptr<Node> &danger_node, size_t &optima
   }
 }
 
-//SWEEP DIMENSIONS METHOD IN ONE DIMENSION
+/*SWEEP METHOD: Using sweep line method, this algorithm returns the cost and cutline for a given axis and an entry set.
+                ALG: partial sort(sweep line) + pick first ff entries + take the ff entry's max bound in the given axis as cutline.*/
 template<typename T, size_t N, size_t M, size_t ff>
 pair<double, T> RPlus<T, N, M, ff>::sweep(size_t axis, vector<Entry> &S) {
   comparator_ENTRYSINGLEDIM comparator(axis);
@@ -320,7 +327,7 @@ pair<double, T> RPlus<T, N, M, ff>::sweep(size_t axis, vector<Entry> &S) {
   return make_pair(min_number_splits(grouped_test, axis, optimal_cutline), optimal_cutline);
 }
 
-//MINIMAL NUMBER OF SPLITS METHOD
+//MIN NUMBER OF SPLITS METHOD: Counts how many entries for a given set intersecs (need split) with a given cutline in given axis.
 template<typename T, size_t N, size_t M, size_t ff>
 int RPlus<T, N, M, ff>::min_number_splits(vector<Entry> &test_set, size_t axis, T optimal_cutline) {
   int cost = 0;
@@ -331,7 +338,7 @@ int RPlus<T, N, M, ff>::min_number_splits(vector<Entry> &test_set, size_t axis, 
   return cost;
 }
 
-//DIST TO NEAREST SIDE OF AN HYPERECTANGLE
+//MINDIST METHOD: Calculates the distance between an hyperpoint and the nearest side of an hyperrectangle.
 template<typename T, size_t N, size_t M, size_t ff>
 double RPlus<T, N, M, ff>::MINDIST(HyperPoint<T, N> p, HyperRectangle<T, N> r) {
   double sum = 0.0;
@@ -344,7 +351,7 @@ double RPlus<T, N, M, ff>::MINDIST(HyperPoint<T, N> p, HyperRectangle<T, N> r) {
   return sqrt(sum);
 }
 
-//DIST BETWEEN TWO POINTS
+//EUCDIST METHOD: Simple function to calculate euclidean distance between two hyperpoints
 template<typename T, size_t N, size_t M, size_t ff>
 double RPlus<T, N, M, ff>::EUCDIST(HyperPoint<T, N> p1, HyperPoint<T, N> p2) {
   double d = 0.0;
@@ -354,7 +361,7 @@ double RPlus<T, N, M, ff>::EUCDIST(HyperPoint<T, N> p1, HyperPoint<T, N> p2) {
   return sqrt(d);
 }
 
-//READ R+ TREE METHOD: Using bfs to read the levels of the tree since the root.
+//READ TREE METHOD: Using bfs, read the levels of the tree since the root.
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::read_tree() {
   if (root) {
@@ -390,6 +397,7 @@ bool RPlus<T, N, M, ff>::Node::is_leaf() {
   return entries[0].is_in_leaf();
 }
 
+//Access to the entries of a node by index
 template<typename T, size_t N, size_t M, size_t ff>
 typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Node::operator[](size_t index) {
   try {
@@ -406,6 +414,7 @@ typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Node::operator[](size_t 
   }
 }
 
+//add single entry
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::Node::add(Entry &new_entry) {
   if (size == 0) {
@@ -425,6 +434,7 @@ void RPlus<T, N, M, ff>::Node::add(Entry &new_entry) {
   }
 }
 
+//add many entries
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::Node::add(vector<Entry> &S) {
   for (Entry &entry : S) {
@@ -432,11 +442,13 @@ void RPlus<T, N, M, ff>::Node::add(vector<Entry> &S) {
   }
 }
 
+//Returns how many active entries has the node
 template<typename T, size_t N, size_t M, size_t ff>
 size_t RPlus<T, N, M, ff>::Node::get_size() {
   return size;
 }
 
+//Change how many active entries has the node
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::Node::resize(size_t new_size) {
   size = new_size;
@@ -475,6 +487,7 @@ RPlus<T, N, M, ff>::Entry::Entry(HyperPoint<T, N> &data) {
   this->data = data;
 }
 
+//Copy for entry
 template<typename T, size_t N, size_t M, size_t ff>
 typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Entry::operator=(const Entry &other) {
   child = other.child;
@@ -482,6 +495,7 @@ typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Entry::operator=(const E
   return *this;
 }
 
+//If the entry is in a leaf node -> returns data made hyperrectangle (0 volume), else -> returns MBR of its child
 template<typename T, size_t N, size_t M, size_t ff>
 HyperRectangle<T, N> RPlus<T, N, M, ff>::Entry::get_mbr() {
   if (!is_in_leaf()) {

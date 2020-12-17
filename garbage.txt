@@ -1,3 +1,14 @@
+template<typename T, size_t N>
+pair<HyperRectangle<T, N>, HyperRectangle<T, N>> HyperRectangle<T, N>::cut(size_t axis, T cutline) {
+  HyperPoint<T, N> f_top_right = top_right, s_bottom_left = bottom_left;
+  f_top_right[axis] = s_bottom_left[axis] = cutline;
+  HyperRectangle<T, N> half_part_f(bottom_left, f_top_right), half_part_s(s_bottom_left, top_right);
+  return make_pair(half_part_f, half_part_s);
+}
+
+
+//////////////////////////
+
 #include <rplus_utils.hpp>
 
 #define GET_BOUNDARIES(entry) entry.get_mbr().get_boundaries()

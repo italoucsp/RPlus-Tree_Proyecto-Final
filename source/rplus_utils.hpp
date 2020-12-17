@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <array>
 
+#include <chrono>
+
 #include <fstream>
 
 #include <iomanip>
@@ -25,6 +27,7 @@
 #include <utility>
 
 #include <vector>
+//A-Z
 
 using namespace std;
 
@@ -35,8 +38,8 @@ using namespace std;
 #define ERROR_NODE_OFR "The index is out of range in the node."
 #define ERROR_EMPTY_TREE "This R+ Tree is empty."
 
-const size_t T_DIMENSIONS_NUM = 19;
-const size_t KUSED_DIMENSIONS = 14;
+const size_t T_DIMENSIONS_NUM = 19;//Number of dimensions in the dataset
+const size_t KUSED_DIMENSIONS = 14;//Number of dimensions that will be used
 
 const char csv_delimiter = ';';
 
@@ -47,8 +50,6 @@ struct HyperPoint {
   HyperPoint();
   HyperPoint(array<T, N> data);
   HyperPoint(array<T, N> data, string sg_name);
-  bool operator<(const HyperPoint<T, N> &other) const;
-  bool operator>(const HyperPoint<T, N> &other) const;
   HyperPoint<T, N>& operator=(const HyperPoint<T, N> &other);
   T& operator[](size_t index);
   T operator[](size_t index) const;
@@ -81,21 +82,6 @@ HyperPoint<T, N>::HyperPoint(array<T, N> data, string sg_name) {
 }
 
 template<typename T, size_t N>
-bool HyperPoint<T, N>::operator<(const HyperPoint<T, N> &other) const{
-  for (size_t i(0); i < N; ++i) {
-    if (multidata[i] >= other.multidata[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-template<typename T, size_t N>
-bool HyperPoint<T, N>::operator>(const HyperPoint<T, N> &other) const {
-  return !(*this < other);
-}
-
-template<typename T, size_t N>
 HyperPoint<T, N>& HyperPoint<T, N>::operator=(const HyperPoint<T, N>& other) {
   songs_name = other.songs_name;
   for (size_t i(0); i < N; ++i)
@@ -120,17 +106,16 @@ string HyperPoint<T, N>::get_songs_name() {
 
 template<typename T, size_t N>
 void HyperPoint<T, N>::show_data() {
-  cout << "\tHyperPoint<" << N << "> : {"; for (size_t i(0); i < N; ++i) cout << setprecision(10) << multidata[i] << ((i != N - 1) ? "," : ""); cout << "}" << endl;
+  cout << "\tHyperPoint<" << N << "> : {"; for (size_t i(0); i < N; ++i) cout << setprecision(10) << multidata[i] << ((i != N - 1) ? "," : ""); cout << "}\n";
 }
 
 template<typename T, size_t N>
-HyperPoint<T, N> get_min(const HyperPoint<T, N> A, const HyperPoint<T, N> B) {
-  return (A < B) ? A : B;
-}
-
-template<typename T, size_t N>
-HyperPoint<T, N> get_max(const HyperPoint<T, N> A, const HyperPoint<T, N> B) {
-  return (A > B) ? A : B;
+istream& operator>>(istream& is, HyperPoint<T, N>& hpoint) {
+  array<T, N> raw_data;
+  for(size_t i(0); i < N; ++i)
+    is >> raw_data[i];
+  hpoint = HyperPoint<T, N>(raw_data);
+  return is;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -143,7 +128,6 @@ struct HyperRectangle {
   bool overlaps(const HyperRectangle<T, N> &other);
   bool contains(const HyperPoint<T, N> &point);
   void adjust(const HyperRectangle<T, N> &other);
-  pair<HyperRectangle<T, N>, HyperRectangle<T, N>> cut(size_t axis, T cutline);
   pair<HyperPoint<T, N>, HyperPoint<T, N>> get_boundaries();
   double get_hypervolume();
   void show_rect();
@@ -201,14 +185,6 @@ void HyperRectangle<T, N>::adjust(const HyperRectangle<T, N> &other) {
     bottom_left[i] = min(other.bottom_left[i], bottom_left[i]);
     top_right[i] = max(other.top_right[i], top_right[i]);
   }
-}
-
-template<typename T, size_t N>
-pair<HyperRectangle<T, N>, HyperRectangle<T, N>> HyperRectangle<T, N>::cut(size_t axis, T cutline) {
-  HyperPoint<T, N> f_top_right = top_right, s_bottom_left = bottom_left;
-  f_top_right[axis] = s_bottom_left[axis] = cutline;
-  HyperRectangle<T, N> half_part_f(bottom_left, f_top_right), half_part_s(s_bottom_left, top_right);
-  return make_pair(half_part_f, half_part_s);
 }
 
 template<typename T, size_t N>

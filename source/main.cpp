@@ -1,6 +1,14 @@
 #include <RPlusTree.hpp>
 
-//TIMER CLASS - Copyright 2020 Roger Peralta Aranibar Advanced Data Estructures
+/*
+-----------------------[ADVANCED DATA STRUCTURES]------------------------
+-----------------SPOTIFY DATASET 1921-2020, 160k+TRACKS------------------
+-------------------------DATA-STRUCT.: R+ Tree---------------------------
+------------------------Italo Mamani Huaricallo--------------------------
+---------------------------Arequipa-Perú-2020----------------------------
+*/
+
+//TIMER CLASS - Copyright 2020 Roger Peralta Aranibar Advanced Data Structures
 template <typename>
 class Timer;
 
@@ -34,32 +42,47 @@ private:
   std::string process_name_;
 };
 
-//#######################################################################
+//##########################GLOBAL-RPLUS-TREE#############################
 
-RPlus<float, 14, 128, 128> demo;
+RPlus<double, KUSED_DIMENSIONS, 16, 8> demo;
+vector<HyperPoint<double, KUSED_DIMENSIONS>> DB_CONTAINER;
+
+//#########################FUNCTIONS-FOR-TIMER############################
 
 int build_data_structure() {
+  demo.assign(DB_CONTAINER);
   return 0;
 }
 
-int query_knn() {
-  return 0;
+vector<HyperPoint<double, KUSED_DIMENSIONS>> query_knn(HyperPoint<double, KUSED_DIMENSIONS> query, size_t k) {
+  return demo.kNN_query(query, k);
 }
 
 int main() {
-  vector<HyperPoint<double, KUSED_DIMENSIONS>> DB_CONTAINER;
   vector<string> considered_features = { "name", "acousticness", "danceability", "duration_ms", "energy",
-                                         "explicit", "instrumentalness", "key", "liveness", "loudness", "mode",
-                                         "popularity", "speechiness", "tempo", "valence" };
-  read_data_from_file("data_set.csv", considered_features, "name", DB_CONTAINER);
-  SAY("extraction_done")
-  RPlus<double, KUSED_DIMENSIONS, 16, 8> demo_2;
-  demo_2.assign(DB_CONTAINER);
-  SAY("insertion_done")
-  //demo_2.read_tree();
-  /*for (auto i : DB_CONTAINER) {
-    i.show_data();
-    cout << i.get_songs_name() << endl;
-  }*/
+                                         "explicit", "instrumentalness", "key", "liveness", "loudness",
+                                         "mode", "popularity", "speechiness", "tempo", "valence" };
+
+  //WARNING[!] : The delimiter in the csv file must be ';'.
+
+    read_data_from_file("data_set.csv", considered_features, "name", DB_CONTAINER);
+    SAY("Data extraction done")
+
+  //=============================TESTING=CAMP==============================
+
+    Timer<int()> timed_built(build_data_structure, "R+ Insertion");
+    timed_built();
+
+    Timer<vector<HyperPoint<double, KUSED_DIMENSIONS>>(HyperPoint<double, KUSED_DIMENSIONS>, size_t)> timed_query(query_knn, "R+ Query kNN");
+    //EXAMPLE
+    HyperPoint<double, KUSED_DIMENSIONS> query(array<double, KUSED_DIMENSIONS>{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 5, 6, 8, 10});
+    //OR HyperPoint<double, KUSED_DIMENSIONS> query; cin >> query;
+    size_t k = 5;
+    vector<HyperPoint<double, KUSED_DIMENSIONS>> result = timed_query(query, k);
+    for (auto &r : result) {
+      r.show_data();
+      cout << "song\'s name : " << r.get_songs_name() << endl;
+    }
+
   return 0;
 }
