@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <iostream>
 
+#include <limits>
+
 #include <math.h>
 #include <memory>
 
@@ -270,9 +272,7 @@ void read_data_from_file(string file_path, vector<string> &features, string id, 
     }
     ++tcfi;
   }
-  int c = 1000;
-  while (getline(data_set_file, row_data_line) && c) {
-    --c;
+  while (getline(data_set_file, row_data_line)) {
     istringstream iss_cols_data(row_data_line);
     size_t i(0), ii(0);
     string data_col_row, songs_name;
