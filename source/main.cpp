@@ -47,6 +47,7 @@ int query_knn() {
 }
 
 int main() {
+  /*
   RPlus<double, 2, 3, 3> demo_1;
   HyperPoint<double, 2> p1(array<double, 2>{1.2, 5.3}, "dwe"), p2(array<double, 2>{4.9, 2.7}, "ade"), p3(array<double, 2>{4.8, 25.2}, "dde"), p4(array<double, 2>{8.8, 12.4}, "zde");
   HyperPoint<double, 2> p5(array<double, 2>{15.2, 6.3}, "dfe"), p6(array<double, 2>{102.5, 77.7}, "bde"), p7(array<double, 2>{-6.8, -2.45}, "ede"), p8(array<double, 2>{-18.9, -17.12}, "xde");
@@ -68,15 +69,21 @@ int main() {
   for (auto res : demo_1.kNN_query(pr, 5)) {
     res.show_data();
   }
-  SAY("done");
-  /*
-  vector<HyperRectangle<double, KUSED_DIMENSIONS>> DB_CONTAINER;
+  SAY("done");*/
+  
+  vector<HyperPoint<double, KUSED_DIMENSIONS>> DB_CONTAINER;
   vector<string> considered_features = { "name", "acousticness", "danceability", "duration_ms", "energy",
                                          "explicit", "instrumentalness", "key", "liveness", "loudness", "mode",
                                          "popularity", "speechiness", "tempo", "valence" };
-  read_data_from_file("data_set_example.txt", considered_features, "name", DB_CONTAINER);
-  for (auto i : DB_CONTAINER) {
-    i.show_rect();
+  read_data_from_file("data_set.csv", considered_features, "name", DB_CONTAINER);
+  SAY("extraction_done")
+  RPlus<double, KUSED_DIMENSIONS, 8, 8> demo_2;
+  demo_2.insert(DB_CONTAINER);
+  SAY("insertion_done")
+  demo_2.read_tree();
+  /*for (auto i : DB_CONTAINER) {
+    i.show_data();
+    cout << i.get_songs_name() << endl;
   }*/
   return 0;
 }

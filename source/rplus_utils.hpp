@@ -36,6 +36,8 @@ using namespace std;
 const size_t T_DIMENSIONS_NUM = 19;
 const size_t KUSED_DIMENSIONS = 14;
 
+const char csv_delimiter = ';';
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template<typename T, size_t N>
@@ -237,7 +239,7 @@ HyperRectangle<T, N> make_hyper_rect(HyperPoint<T, N> &h_point) {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-//CSV file reader : path of the file | features that were considered | container for the data in hyperrectangles
+//CSV file reader : path of the file | features that were considered | id(name of the song) | container for the data in hypepoints
 template<typename T, size_t N>
 void read_data_from_file(string file_path, vector<string> &features, string id, vector<HyperPoint<T, N>> &db_container) {
   string cols_labels, row_data_line;
@@ -258,7 +260,7 @@ void read_data_from_file(string file_path, vector<string> &features, string id, 
   table_check_features.fill(false);
   size_t tcfi(0), id_id(0);
   while (!iss_cols_labels.eof()) {
-    getline(iss_cols_labels, label, ',');
+    getline(iss_cols_labels, label, csv_delimiter);
     for (size_t fi(0); fi < features.size(); ++fi) {
       if (features[fi] == label) {
         table_check_features[tcfi] = true;
@@ -268,14 +270,15 @@ void read_data_from_file(string file_path, vector<string> &features, string id, 
     }
     ++tcfi;
   }
-
-  while (getline(data_set_file, row_data_line)) {
+  int c = 1000;
+  while (getline(data_set_file, row_data_line) && c) {
+    --c;
     istringstream iss_cols_data(row_data_line);
     size_t i(0), ii(0);
     string data_col_row, songs_name;
     array<T, KUSED_DIMENSIONS> raw_multidimensional_data;
     while (!iss_cols_data.eof()) {
-      getline(iss_cols_data, data_col_row, ',');
+      getline(iss_cols_data, data_col_row, csv_delimiter);
       if (i < T_DIMENSIONS_NUM && table_check_features[i]) {
         if (id_id == i)
           songs_name = data_col_row;

@@ -40,7 +40,7 @@ private:
     ENTRYDIST(HyperPoint<T, N> &p, Entry &md_obj){
       entry = md_obj;
       if(md_obj.get_mbr().get_hypervolume() > 0)
-        distance = RPlus::MINDIST(p, md_obj.get_mbr());//Roussopoulos said that a R tree with minimun overlap don't need MINMAXDIST, and R+ ... don't have overlap so...
+        distance = RPlus::MINDIST(p, md_obj.get_mbr());//Roussopoulos : An R tree with minimun overlap don't need MINMAXDIST function, and R+ ... don't have overlap so...
       else
         distance = RPlus::EUCDIST(p, md_obj.data);
     }
@@ -71,6 +71,7 @@ private:
   shared_ptr<Node> root;
 
   shared_ptr<Node> split_node(shared_ptr<Node> &A, size_t axis, T optimal_cutline);
+  //void force_split(vector<Entry> &current_tff_set, vector<Entry> &remainder_entries);
   vector<Entry> partition(vector<Entry> &S, vector<Entry> &s_to_split, size_t &optimal_dim, T &optimal_cutline);
   void pack(vector<Entry> &S);
   inline pair<double, T> sweep(size_t axis, vector<Entry> &S, vector<Entry> &grouped_test, vector<Entry> &rest);
@@ -194,7 +195,6 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::kNN_query(HyperPoint<T, N> refdata,
           if(temp_songs_names_size != songs_names.size())
             kNN[i++] = closest_entry.entry.data;
           //end try
-          best_branchs_queue.pop();
         }
       }
       return kNN;
@@ -247,6 +247,7 @@ vector<typename RPlus<T, N, M, ff>::Entry> RPlus<T, N, M, ff>::partition(vector<
     nn_set.swap(S);
     return nn_set;
   }
+  SAY("__partition_begin__")
   double cheapest_cost = DBL_MAX;
   optimal_dim = size_t(0);
   optimal_cutline = 0;
@@ -274,6 +275,7 @@ vector<typename RPlus<T, N, M, ff>::Entry> RPlus<T, N, M, ff>::partition(vector<
       s_to_split.push_back(entry);
   }
   S.clear(); S.swap(remainder_entries);
+  SAY("__partition_end__")
   return only_new_group;
 }
 
@@ -296,14 +298,17 @@ void RPlus<T, N, M, ff>::pack(vector<Entry> &S) {
           current_tff_set.emplace_back(entry.child);
         }
         else 
-          S.emplace_back(entry.data);//to have at least ff entries in the new node
+          S.emplace_back(entry.data);
       }
       s_to_split.clear();
     }
     shared_ptr<Node> new_node = make_shared<Node>();
+    SAY(current_tff_set.size())
+    SAY(S.size())
     new_node->add(current_tff_set);
     next_level_upward.emplace_back(new_node);
   }
+  SAY("level_done")
   pack(next_level_upward);
 }
 
