@@ -10,6 +10,10 @@
                                                                                   ...*/
 #define VISUALIZE_INSERT_COUNT
 
+//Comment NON_REPEATED_SONGS if you want repeated songs by the id(this case is "name"), by default commented because this is a R+Tree for points, not for shapes with volume
+
+//#define NON_REPEATED_SONGS
+
 /*TEMPLATE PARAMETERS: (1)data type | (2)number of dimensions | (3)max entries per node | (4)fill factor(by default = 2)
   Contains: Node, Entry, comparators(ENTRYSINGLEDIM, ENTRYDIST).
   Approach: P R+ Tree (Point R+ Tree non packed) - insertion 1x1 - knn query and range query using queues and stacks.
@@ -151,12 +155,16 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::search(const HyperRectangle<T, N> &
             if (!current->is_leaf())
               dfs_s.push((*current)[i].child);
             else {
+#ifdef NON_REPEATED_SONGS
               size_t temp_songs_names_size = songs_names.size();
               //try pick data
               songs_names.insert((*current)[i].data.get_songs_name());
               if (temp_songs_names_size != songs_names.size())
                 range_query.push_back((*current)[i].data);
               //end try
+#else
+              range_query.push_back((*current)[i].data);
+#endif // NON_REPEATED_SONGS
             }
           }
         }
@@ -191,12 +199,16 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::kNN_query(HyperPoint<T, N> refdata,
         if (!closest_entry.entry.is_in_leaf())
           push_node_in_queue(refdata, closest_entry.entry.child, best_branchs_queue);
         else {
+#ifdef NON_REPEATED_SONGS
           size_t temp_songs_names_size = songs_names.size();
           //try pick k(i) nn
           songs_names.insert(closest_entry.entry.data.get_songs_name());
           if (temp_songs_names_size != songs_names.size())
             kNN[i++] = closest_entry.entry.data;
           //end try
+#else
+          kNN[i++] = closest_entry.entry.data;
+#endif // NON_REPEATED_SONGS
         }
       }
       return kNN;
@@ -236,18 +248,18 @@ void RPlus<T, N, M, ff>::assign(vector<HyperPoint<T, N>> &unpacked_data) {
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::insert(Entry &entry) {
   stack<shared_ptr<Node>> parents;
-  shared_ptr<Node> candidate_node = choose_leaf(entry, parents);
+  shared_ptr<Node> &candidate_node = choose_leaf(entry, parents);
   //if saturated node ->split, else -> simple insert
   candidate_node->add(entry);
   if (candidate_node->get_size() > M) {
     parents.push(candidate_node);
     while (parents.top()->get_size() > M) {
-      shared_ptr<Node> current_to_split = parents.top();
+      shared_ptr<Node> &current_to_split = parents.top();
       parents.pop();
       Entry new_entry(split_by_saturation(current_to_split));
 
       if (!parents.empty()) {//parent is an internal node
-        shared_ptr<Node> currents_parent = parents.top();
+        shared_ptr<Node> &currents_parent = parents.top();
         currents_parent->add(new_entry);
       }
       else {//no more parents?? -> new root = grow up the tree
@@ -284,20 +296,27 @@ shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_by_paren
   shared_ptr<Node> B = make_shared<Node>();
   vector<Entry> set_A, set_B;
   for (size_t i(0); i < A->get_size(); ++i) {
-    if (GET_BOUNDARIES((*A)[i]).second[axis] <= cutline)
-      set_A.push_back((*A)[i]);
-    else if (GET_BOUNDARIES((*A)[i]).first[axis] >= cutline)
-      set_B.push_back((*A)[i]);
-    else {
-      if (!A->is_leaf()) {
-        set_B.emplace_back(split_by_parent_cut((*A)[i].child, axis, cutline));
-        set_A.emplace_back((*A)[i].child);
-      }//if A were a leaf, would be impossible to split a point
+    Entry &entry = (*A)[i];
+    if (A->is_leaf()) {
+      if(entry.data[axis] < cutline)
+        set_A.push_back(entry);
+      else if (entry.data[axis] > cutline)
+        set_B.push_back(entry);
       else {
-        if(set_A.size() < set_B.size())
-          set_A.push_back((*A)[i]);
+        if(set_A.size() > set_B.size())
+          set_B.push_back(entry);
         else
-          set_B.push_back((*A)[i]);
+          set_A.push_back(entry);
+      }
+    }
+    else {
+      if (GET_BOUNDARIES(entry).second[axis] <= cutline)
+        set_A.push_back(entry);
+      else if (GET_BOUNDARIES(entry).first[axis] >= cutline)
+        set_B.push_back(entry);
+      else {
+        set_B.emplace_back(split_by_parent_cut(entry.child, axis, cutline));
+        set_A.emplace_back(entry.child);
       }
     }
   }
@@ -351,9 +370,17 @@ pair<double, T> RPlus<T, N, M, ff>::sweep(size_t axis, vector<Entry> &S) {
 template<typename T, size_t N, size_t M, size_t ff>
 int RPlus<T, N, M, ff>::min_number_splits(vector<Entry> &test_set, size_t axis, T optimal_cutline) {
   int cost = 0;
-  for (Entry &entry : test_set) {
-    if (GET_BOUNDARIES(entry).first[axis] < optimal_cutline && GET_BOUNDARIES(entry).second[axis] > optimal_cutline)
-      ++cost;
+  if (!test_set[0].is_in_leaf()) {
+    for (Entry &entry : test_set) {
+      if (GET_BOUNDARIES(entry).first[axis] < optimal_cutline && GET_BOUNDARIES(entry).second[axis] > optimal_cutline)
+        ++cost;
+    }
+  }
+  else {
+    for (Entry &entry : test_set) {
+      if (entry.data[axis] == optimal_cutline)
+        ++cost;
+    }
   }
   return cost;
 }
