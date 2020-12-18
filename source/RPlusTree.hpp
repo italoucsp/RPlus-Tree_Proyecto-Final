@@ -2,6 +2,14 @@
 
 #define GET_BOUNDARIES(entry) entry.get_mbr().get_boundaries()
 
+/*Comment VISUALIZE_INSERT_COUNT if you don't want to see the insert counter ex.: [STEP] : 151623
+                                                                                  [STEP] : 151624
+                                                                                  [STEP] : 151625
+                                                                                  [STEP] : 151626
+                                                                                  [STEP] : 151627
+                                                                                  ...*/
+#define VISUALIZE_INSERT_COUNT
+
 /*TEMPLATE PARAMETERS: (1)data type | (2)number of dimensions | (3)max entries per node | (4)fill factor(by default = 2)
   Contains: Node, Entry, comparators(ENTRYSINGLEDIM, ENTRYDIST).
   Approach: P R+ Tree (Point R+ Tree non packed) - insertion 1x1 - knn query and range query using queues and stacks.
@@ -113,7 +121,7 @@ RPlus<T, N, M, ff>::RPlus() {
   }
   catch (const exception &error) {
     ALERT(error.what());
-    exit(0);
+    exit(1);
   }
 }
 
@@ -158,7 +166,7 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::search(const HyperRectangle<T, N> &
   }
   catch (const exception &error) {
     ALERT(error.what())
-      exit(0);
+      exit(1);
   }
 }
 
@@ -196,7 +204,7 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::kNN_query(HyperPoint<T, N> refdata,
   }
   catch (const exception &error) {
     ALERT(error.what())
-      exit(0);
+      exit(1);
   }
 }
 
@@ -212,9 +220,15 @@ void RPlus<T, N, M, ff>::push_node_in_queue(HyperPoint<T, N> refdata, shared_ptr
 //ASSIGN METHOD: "Massive" insertion(1x1x(size of unpacked_data vector)). Give a list of hyperpoints (data) to insert in the R+
 template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::assign(vector<HyperPoint<T, N>> &unpacked_data) {
+  size_t step_insert(1);
   for (HyperPoint<T, N> &hp : unpacked_data) {
     Entry data_entry(hp);
     insert(data_entry);
+#ifdef VISUALIZE_INSERT_COUNT
+    SAY(step_insert)
+      ++step_insert;
+#endif // VISUALIZE_INSERT_COUNT
+
   }
 }
 
@@ -279,6 +293,12 @@ shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_by_paren
         set_B.emplace_back(split_by_parent_cut((*A)[i].child, axis, cutline));
         set_A.emplace_back((*A)[i].child);
       }//if A were a leaf, would be impossible to split a point
+      else {
+        if(set_A.size() < set_B.size())
+          set_A.push_back((*A)[i]);
+        else
+          set_B.push_back((*A)[i]);
+      }
     }
   }
   A->resize(0); A->add(set_A);
@@ -410,7 +430,7 @@ typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Node::operator[](size_t 
   }
   catch (const exception &error) {
     ALERT(error.what())
-    exit(0);
+    exit(1);
   }
 }
 

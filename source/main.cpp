@@ -43,7 +43,7 @@ private:
 };
 
 //##########################GLOBAL-RPLUS-TREE#############################
-
+//Best try tested: M = 16, ff = 8
 RPlus<double, KUSED_DIMENSIONS, 16, 8> demo;
 vector<HyperPoint<double, KUSED_DIMENSIONS>> DB_CONTAINER;
 
@@ -75,13 +75,26 @@ int main() {
 
     Timer<vector<HyperPoint<double, KUSED_DIMENSIONS>>(HyperPoint<double, KUSED_DIMENSIONS>, size_t)> timed_query(query_knn, "R+ Query kNN");
     //EXAMPLE
-    HyperPoint<double, KUSED_DIMENSIONS> query(array<double, KUSED_DIMENSIONS>{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 5, 6, 8, 10});
-    //OR HyperPoint<double, KUSED_DIMENSIONS> query; cin >> query;
-    size_t k = 5;
-    vector<HyperPoint<double, KUSED_DIMENSIONS>> result = timed_query(query, k);
-    for (auto &r : result) {
-      r.show_data();
-      cout << "song\'s name : " << r.get_songs_name() << endl;
+    //HyperPoint<double, KUSED_DIMENSIONS> query(array<double, KUSED_DIMENSIONS>{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 5, 6, 8, 10});
+    //OR HyperPoint<double, KUSED_DIMENSIONS> query; cin >> query; input: 1 2 3 4 5 6 7 8 9 0 5 6 8 10
+    int option;
+    while (true) {
+      SAY("Write 1 if you want to do a knn query or 0 if you want to exit:")
+        cin >> option;
+        if (option) {
+          SAY("Write the content of the query separated by space:")
+          HyperPoint<double, KUSED_DIMENSIONS> query; cin >> query;
+          SAY("Write how many neigbors do you want(k):")
+          size_t k; cin >> k;
+          vector<HyperPoint<double, KUSED_DIMENSIONS>> result = timed_query(query, k);
+          for (auto &r : result) {
+            r.show_data();
+            cout << "song\'s name : " << r.get_songs_name() << endl;
+          }
+        }
+        else {
+          exit(0);
+        }
     }
 
   return 0;
