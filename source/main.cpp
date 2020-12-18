@@ -43,9 +43,12 @@ private:
 };
 
 //##########################GLOBAL-RPLUS-TREE#############################
+//Go to the file "RPlusTree.hpp to see the code for R+ and documentation
+//Go to the file "rplus_utils.hpp to see the code for R+ tools
 //Best try tested: M = 16, ff = 8
 RPlus<double, KUSED_DIMENSIONS, 16, 8> demo;
-vector<HyperPoint<double, KUSED_DIMENSIONS>> DB_CONTAINER;
+
+vector<HyperPoint<double, KUSED_DIMENSIONS>> DB_CONTAINER;//To store the dataset for insertion
 
 //#########################FUNCTIONS-FOR-TIMER############################
 
@@ -59,6 +62,7 @@ vector<HyperPoint<double, KUSED_DIMENSIONS>> query_knn(HyperPoint<double, KUSED_
 }
 
 int main() {
+  //Vector that contains the 14 USED DIMENSIONS + 1(ID = "name")
   vector<string> considered_features = { "name", "acousticness", "danceability", "duration_ms", "energy",
                                          "explicit", "instrumentalness", "key", "liveness", "loudness",
                                          "mode", "popularity", "speechiness", "tempo", "valence" };

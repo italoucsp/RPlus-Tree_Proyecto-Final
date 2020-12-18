@@ -29,6 +29,8 @@
 #include <vector>
 //A-Z
 
+//This file only contains tools for R+
+
 using namespace std;
 
 #define ALERT(message) cerr << "[ERROR] : " << message << endl;
@@ -44,7 +46,7 @@ const size_t KUSED_DIMENSIONS = 14;//Number of dimensions that will be used
 const char csv_delimiter = ';';
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+//HyperPoint : DATA or Bound for HyperRectangle
 template<typename T, size_t N>
 struct HyperPoint {
   HyperPoint();
@@ -119,7 +121,7 @@ istream& operator>>(istream& is, HyperPoint<T, N>& hpoint) {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+//Class for the MBR of each entry/node in the R+
 template<typename T, size_t N>
 struct HyperRectangle {
   HyperRectangle();
@@ -215,7 +217,6 @@ HyperRectangle<T, N> make_hyper_rect(HyperPoint<T, N> &h_point) {
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 //CSV file reader : path of the file | features that were considered | id(name of the song) | container for the data in hypepoints
 template<typename T, size_t N>

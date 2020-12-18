@@ -14,14 +14,21 @@
 
 //#define NON_REPEATED_SONGS
 
+//##########################################################################################################################################################################
+
 /*TEMPLATE PARAMETERS: (1)data type | (2)number of dimensions | (3)max entries per node | (4)fill factor(by default = 2)
   Contains: Node, Entry, comparators(ENTRYSINGLEDIM, ENTRYDIST).
   Approach: P R+ Tree (Point R+ Tree non packed) - insertion 1x1 - knn query and range query using queues and stacks.
-  Features: No overlap (geometric and by saturation propagated split), structure to store hyperpoints, non repeatable data (because this structure store points).
+  Features: No overlap (geometric and by saturation propagated splits), structure to store hyperpoints, non repeatable data (because this structure store points).
   Link: https://github.com/italoucsp/RPlus-Tree_Proyecto-Final.
   Why not pack algorithm?: too (a lot) slow at first for entries more than 10k, Time Complexity: O(n^2/k log ff) aprox. 
-                           But samely I have the code with pack algorithm ("garbage.txt").
-  Operations that you are able to do: insertion(insert,"1x1"), range query(search), k-nearest neighbors query(kNN_query).*/
+                           But samely I have the code with pack algorithm (github link -> "garbage.txt").
+  Operations that you are able to do: assign(insert,"1x1"), range query(search), k-nearest neighbors query(kNN_query).
+  REFERENCES:
+    1.PAPER R+: T. Sellis, N. Roussopoulos, C. Faloutsos, "The R+ Tree A Dinamic Index For Multi-dimensional Objects"
+                Department of Computer Science University of Maryland College Park, MD 20742
+    2.PAPER KNN: A. Papadopoulos, Y. Manolopoulos, "Performance of Nearest Neighbor Queries in R-trees *",
+                 Department of Informatics Aristotle University - 54006 Thessaloniki , Greece*/
 template<typename T, size_t N, size_t M, size_t ff = 2>
 class RPlus {
 private:
@@ -56,7 +63,7 @@ private:
     ENTRYDIST(HyperPoint<T, N> &p, Entry &md_obj){
       entry = md_obj;
       if(md_obj.get_mbr().get_hypervolume() > 0)
-        distance = RPlus::MINDIST(p, md_obj.get_mbr());//page 5, rule 3, line 5 to 7 - Roussopoulos et al. suggest that when the overlap is small...
+        distance = RPlus::MINDIST(p, md_obj.get_mbr());//ref(PAPER KNN): page 5, rule 3, line 5 to 7 - Roussopoulos et al. suggest that when the overlap is small...
       else
         distance = RPlus::EUCDIST(p, md_obj.data);//If the entry is in leaf, then use euclidean distance because the distance is now between hyperpoints
     }
@@ -179,8 +186,7 @@ vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::search(const HyperRectangle<T, N> &
 }
 
 /*KNN METHOD: k-Nearest Neighbors query using branch and bound algorithm with MINDIST function.
-  PAPER: A. Papadopoulos, Y. Manolopoulos, "Performance of Nearest Neighbor Queries in R-trees *",
-         Department of Informatics Aristotle University - 54006 Thessaloniki , Greece */
+  ref(PAPER KNN) */
 template<typename T, size_t N, size_t M, size_t ff>
 vector<HyperPoint<T, N>> RPlus<T, N, M, ff>::kNN_query(HyperPoint<T, N> refdata, size_t k) {
   try {
