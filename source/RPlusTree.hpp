@@ -7,7 +7,8 @@
                                                                                   [STEP] : 151625
                                                                                   [STEP] : 151626
                                                                                   [STEP] : 151627
-                                                                                  ...*/
+                                                                                  ...
+*/
 #define VISUALIZE_INSERT_COUNT
 
 //Comment NON_REPEATED_SONGS if you want repeated songs by the id(this case is "name"), by default commented because this is a R+Tree for points, not for shapes with volume
@@ -21,14 +22,15 @@
   Approach: P R+ Tree (Point R+ Tree non packed) - insertion 1x1 - knn query and range query using queues and stacks.
   Features: No overlap (geometric and by saturation propagated splits), structure to store hyperpoints, non repeatable data (because this structure store points).
   Link: https://github.com/italoucsp/RPlus-Tree_Proyecto-Final.
-  Why not pack algorithm?: too (a lot) slow at first for entries more than 10k, Time Complexity: O(n^2/k log ff) aprox. 
+  Why not pack algorithm?: too (a lot) slow at first for entries more than 10k, Time Complexity: O(n^2/k log ff) aprox.
                            But samely I have the code with pack algorithm (github link -> "garbage.txt").
   Operations that you are able to do: assign(insert,"1x1"), range query(search), k-nearest neighbors query(kNN_query).
   REFERENCES:
-    1.PAPER R+: T. Sellis, N. Roussopoulos, C. Faloutsos, "The R+ Tree A Dinamic Index For Multi-dimensional Objects"
-                Department of Computer Science University of Maryland College Park, MD 20742
-    2.PAPER KNN: A. Papadopoulos, Y. Manolopoulos, "Performance of Nearest Neighbor Queries in R-trees *",
-                 Department of Informatics Aristotle University - 54006 Thessaloniki , Greece*/
+     1.PAPER R+: T. Sellis, N. Roussopoulos, C. Faloutsos, "The R+ Tree A Dinamic Index For Multi-dimensional Objects"
+                 Department of Computer Science University of Maryland College Park, MD 20742
+     2.PAPER KNN: A. Papadopoulos, Y. Manolopoulos, "Performance of Nearest Neighbor Queries in R-trees *",
+                 Department of Informatics Aristotle University - 54006 Thessaloniki , Greece
+*/
 template<typename T, size_t N, size_t M, size_t ff = 2>
 class RPlus {
 private:
@@ -60,9 +62,9 @@ private:
   struct ENTRYDIST {
     double distance;//Priority criteria
     Entry entry;//Object for the queue
-    ENTRYDIST(HyperPoint<T, N> &p, Entry &md_obj){
+    ENTRYDIST(HyperPoint<T, N> &p, Entry &md_obj) {
       entry = md_obj;
-      if(md_obj.get_mbr().get_hypervolume() > 0)
+      if (md_obj.get_mbr().get_hypervolume() > 0)
         distance = RPlus::MINDIST(p, md_obj.get_mbr());//ref(PAPER KNN): page 5, rule 3, line 5 to 7 - Roussopoulos et al. suggest that when the overlap is small...
       else
         distance = RPlus::EUCDIST(p, md_obj.data);//If the entry is in leaf, then use euclidean distance because the distance is now between hyperpoints
@@ -304,12 +306,12 @@ shared_ptr<typename RPlus<T, N, M, ff>::Node> RPlus<T, N, M, ff>::split_by_paren
   for (size_t i(0); i < A->get_size(); ++i) {
     Entry &entry = (*A)[i];
     if (A->is_leaf()) {
-      if(entry.data[axis] < cutline)
+      if (entry.data[axis] < cutline)
         set_A.push_back(entry);
       else if (entry.data[axis] > cutline)
         set_B.push_back(entry);
       else {
-        if(set_A.size() > set_B.size())
+        if (set_A.size() > set_B.size())
           set_B.push_back(entry);
         else
           set_A.push_back(entry);
@@ -463,7 +465,7 @@ typename RPlus<T, N, M, ff>::Entry& RPlus<T, N, M, ff>::Node::operator[](size_t 
   }
   catch (const exception &error) {
     ALERT(error.what())
-    exit(1);
+      exit(1);
   }
 }
 
@@ -511,7 +513,7 @@ template<typename T, size_t N, size_t M, size_t ff>
 void RPlus<T, N, M, ff>::Node::print_node(bool rp_root) {
   cout << "\tNODE : size(" << size << ") = [" << endl;
   cout << "\t\tA. ID : " << this << endl;
-  cout << "\t\tB. Type : " << ((rp_root)? "ROOT" :((is_leaf())?"LEAF":"INTERNAL")) << endl;
+  cout << "\t\tB. Type : " << ((rp_root) ? "ROOT" : ((is_leaf()) ? "LEAF" : "INTERNAL")) << endl;
   cout << "\t\tC. Boundaries : \n";
   mbr.show_rect();
   cout << "\t\tD. [Entries] : \n";
