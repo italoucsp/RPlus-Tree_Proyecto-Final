@@ -72,12 +72,12 @@ namespace ads {
     struct Entry {
       Entry() {}
 
-      Entry(const std::shared_ptr<RData_type>& record) {
+      Entry(const std::shared_ptr<RData_type> record) {
         record_ = record;
         mbr_ = record();
       }
 
-      Entry(const std::shared_ptr<RPNode>& son_ptr) {
+      Entry(const std::shared_ptr<RPNode> son_ptr) {
         son_ptr_ = son_ptr;
         mbr_ = son_ptr->calculate_mbr();
       }
@@ -91,30 +91,50 @@ namespace ads {
       KDRect<K_Dimensions>& get_mbr() const noexcept {
         return mbr_;
       }
+
+      std::shared_ptr<RPNode> get_son() const noexcept{
+        return son_ptr_;
+      }
+
     private:
       KDRect<K_Dimensions> mbr_;
       std::shared_ptr<RPNode> son_ptr_;
       std::shared_ptr<RData_type> record_;
     };
+
     struct RPNode {
-      RPNode() { last_ = fields.before_begin(); }
+      typedef Entry* iterator;
+      typedef const Entry* const_iterator;
+
+      iterator begin() { return fields.begin(); }
+
+      iterator end() { return last_; }
+
+      const_iterator begin() const { return fields.begin(); }
+
+      const_iterator end() const { return last_; }
+
+      RPNode(std::size_t level = 0) { 
+        last_ = fields.before_begin();
+        size_ = 0;
+        level_ = level;
+      }
 
       std::size_t size() const noexcept{
         return size_;
       }
 
-      bool is_leaf() { return level_ == 0; }
+      std::size_t get_level() const noexcept {
+        return level_;
+      }
 
-      void insert(const Entry& entry) {
+      bool is_leaf() noexcept { return level_ == 0; }
+
+      bool is_overflowed() noexcept { return size_ > Node_Size; }
+
+      void insert(const Entry entry) {
         last_ = fields.insert_after(last_, entry);
         ++size_;
-      }
-      
-      const Entry& scan_node(const RContainer_type& container_value) {
-        for (Entry& entry : fields) {
-          if (entry.get_mbr().overlaps(container_value))
-            return entry;
-        }
       }
 
       const KDRect<K_Dimensions> calculate_mbr() {
@@ -148,6 +168,16 @@ namespace ads {
           }
         }
       }
+
+      std::shared_ptr<RPNode> split(std::size_t& axis, double& cutline) {
+        std::shared_ptr<RPNode> other_half = std::make_shared<RPNode>(level_);
+        std::forward_list<Entry> left_group, right_group;
+        for (Entry& entry : fields) {
+          entry.get_mbr();
+        }
+        return other_half;
+      }
+
     private:
       std::forward_list<Entry> fields;
       typename std::forward_list<Entry>::iterator last_;
@@ -168,13 +198,38 @@ namespace ads {
       root_ = std::make_shared<RPNode>();
       std::cout << "Arbol creado" << std::endl;
     }
+
     virtual ~RPlusTree() {
       root_.reset();
     }
+
     void insert(const RData_type& data) {
       std::stack<std::shared_ptr<RPNode>> ancestors;
-      std::shared_ptr<RPNode> cnode = choose_leaf(ancestors);
+      std::shared_ptr<RPNode> cnode = choose_leaf(data(), ancestors);
+      std::shared_ptr<RPNode> splitted_node_left, splitted_node_right;
+      cnode->insert(Entry(std::make_shared<RData_type>(data)));
+      ancestors.push(cnode);
+      while (ancestors.top()->is_overflowed()) {
+        std::size_t current_axis;
+        double current_cutline;
+        ancestors.top()->find_best_partition(current_axis, current_cutline);
+        splitted_node_right = ancestors.top()->split(current_axis, current_cutline);
+        splitted_node_left = ancestors.top();
+        ancestors.pop();
+        if (!ancestors.empty()) {//normal split-insertion operation
+          ancestors.top()->insert(splitted_node_left);
+          ancestors.top()->insert(splitted_node_right);
+        }
+        else {//new root by split-insertion operation
+          std::shared_ptr<RPNode> newroot = std::make_shared<RPNode>(root_->get_level());
+          newroot->insert(splitted_node_left);
+          newroot->insert(splitted_node_right);
+          root_ = newroot;
+          return;
+        }
+      }
     }
+
     void assign(const std::vector<RData_type>& data_set) {
       std::chrono::time_point<std::chrono::high_resolution_clock> start_time, end_time;
       start_time = std::chrono::high_resolution_clock::now();
@@ -183,6 +238,7 @@ namespace ads {
       }
       end_time = std::chrono::high_resolution_clock::now();
     }
+
     std::vector<RData_type> knn_query(std::size_t k, KDPoint<K_Dimensions> center) {
       std::chrono::time_point<std::chrono::high_resolution_clock> start_time, end_time;
       start_time = std::chrono::high_resolution_clock::now();
@@ -190,10 +246,21 @@ namespace ads {
       end_time = std::chrono::high_resolution_clock::now();
 
     }
+
   private://private methods
-    std::shared_ptr<RPNode> choose_leaf(std::stack<std::shared_ptr<RPNode>>& ancestors_path) {
+    std::shared_ptr<RPNode> choose_leaf(const RContainer_type& val_container,
+                                std::stack<std::shared_ptr<RPNode>>& ancestors_path) {
       std::shared_ptr<RPNode> cnode = root;
-      return nullptr;
+      while (!cnode->is_leaf()) {
+        ancestors_path.push(cnode);
+        std::shared_ptr<RPNode> temp = cnode;
+        for (Entry& entry : temp) {
+          cnode = entry.get_son();
+          if (entry.get_mbr().overlaps(val_container))
+            break;
+        }
+      }
+      return cnode;
     }
   };
 }
